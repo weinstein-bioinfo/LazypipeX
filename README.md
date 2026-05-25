@@ -1,8 +1,8 @@
 # LazypipeX
 
-**Note:** This repository currently contains documentation only. The pipeline code is available at [bitbucket.org/plyusnin/lazypipe](https://bitbucket.org/plyusnin/lazypipe/) and will be migrated here in due course.
-
 Customizable metagenomics pipeline for fast and sensitive virus discovery from NGS data, with chained annotation strategies and interactive IGV reporting.
+
+For prior versions of the pipeline (Lazypipe 1–3) see [bitbucket.org/plyusnin/lazypipe](https://bitbucket.org/plyusnin/lazypipe/).
 
 ## Documentation
 
@@ -38,3 +38,4 @@ GNU GPLv3 — see LICENSE and COPYRIGHT.
 
 Project website: https://www.helsinki.fi/en/projects/lazypipe  
 Email: grp-lazypipe@helsinki.fi
+

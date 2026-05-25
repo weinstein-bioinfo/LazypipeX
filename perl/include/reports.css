@@ -1,0 +1,170 @@
+/* CSS FOR LAZYPIPE REPORTS */
+/* START CSS FOR NAVIGATION TABLE */
+	table.nav, table.nav tr{
+		background-color: #ffffff;
+	}
+	table.nav, table.nav td{
+		spacing: 0px;
+		padding: 0px;
+	}
+	table.nav td{
+		text-align: left;
+	}
+	table.nav a, table.nav span{
+  		display: inline-block;
+  		color: black;
+  		padding: 5px 10px 5px 10px;
+  		text-decoration: none;
+  		font-family: "Georgia";
+  		font-weight: normal;
+  		font-style: italic;
+  		width: 90%;
+  		text-align: left;
+	}
+	table.nav a:link{
+		text-decoration: none;
+	}
+	table.nav a:hover {
+		background-color: #D2DFF4;
+		text-decoration: underline;
+	}
+	table.nav a.selected{
+		background-color: #D2DFF4;
+	}
+	table.nav a:visited {
+  		text-decoration: none;
+	}
+	button.nav{
+  		padding: 10px 10px 10px 10px;
+  		text-decoration: none;
+  		font-family: "Georgia";
+  		font-weight: bold;
+  		font-style: italic;
+	}
+/* END CSS FOR NAVIGATION TABLE */
+
+/* START CSS FOR SORTABLE TABLE */
+	table{ 
+		background-color: #ffffff;
+		border: none;
+	}
+	th, td {
+		spacing: 0px;
+		padding: 5px;
+		text-align: center;
+	}
+	th{
+		font-weight: bold;
+		border-bottom: thin solid #888;
+		white-space: nowrap;
+		text-align: center;
+	}
+	th span{
+		text-align: center;
+	}
+	th.desc span:after{
+		content: "▼";
+		font-size: 80%;
+		font-weight: normal;
+	}
+	th.asc span:after{
+		content: "▲";
+		font-size: 80%;
+		font-weight: normal;
+	}
+	th.mixed span:after{
+		content: "\00a0";
+		font-weight: bold;
+	}
+	tr:nth-child(even) {
+		/*background-color: #e5f4ff;*/
+		background-color: #D2DFF4;
+	}
+	table.sortable th:focus,
+	table.sortable th:hover {
+		background-color: #D2DFF4;
+	}
+	td.num, td.int, td.double, td.percent{
+		text-align: right;
+	}
+/* END CSS FOR SORTABLE TABLE */
+
+/* START CSS FOR TOOLTIPS */
+	.tooltip {
+		position: relative;
+		display: inline-block;
+		border-bottom: 1px dotted black;
+		--width: 160px;
+		--background_color: #ddd;
+		--color: #000;
+		--text_align: center;
+		--padding: 5px 10px;
+		--margin_left: 80px;
+		--opacity: 0;
+	}
+	.tooltip .tooltiptext {
+		visibility: hidden;
+		width: var(--width);
+		background-color: var(--background_color);
+		color: var(--color);
+		text-align: var(--text_aling);
+		border-radius: 6px;
+		padding: var(--padding);
+		position: absolute;
+		z-index: 1;
+		bottom: -125%;
+		left: 125%;
+		margin-left: var(--margin_letf);
+		opacity: var(--opacity);
+		transition: opacity 0.3s;
+	}
+	/* tooltip arrow */
+	.tooltip .tooltiptext::after {
+	  content: '';
+	  position: absolute;
+	  top: 50%;
+	  left: -5px;
+	  margin-left: -5px;
+	  border-width: 5px;
+	  border-style: solid;
+	  border-color: transparent var(--background_color) transparent transparent;
+	}
+	.tooltip:hover .tooltiptext {
+	  visibility: visible;
+	  opacity: 1;
+	}
+/* END CSS FOR TOOLTIPS */
+
+/* START CSS for custom ranges */
+	.range {
+		--ticksThickness: 2px;
+		--ticksHeight: 30%;
+		--ticksColor: silver;
+		display: inline-block;
+		background: silver;
+		background: linear-gradient(to right, var(--ticksColor) var(--ticksThickness), transparent 1px) repeat-x;
+		background-size: calc(100%/((var(--max) - var(--min)) / var(--step)) - .1%) var(--ticksHeight);
+		background-position: 0 bottom;
+		position: relative;
+	}
+	/* min / max labels at the edges */
+	.range::before, .range::after {
+		font: 12px monospace;
+		content: counter(x);
+		position: absolute;
+		bottom: -2ch;
+	}
+	.range::before {
+		counter-reset: x var(--min);
+		transform: translateX(-50%);
+	}
+	.range::after {
+		counter-reset: x var(--max);
+		right: 0;
+		transform: translateX(50%);
+	}
+	.range > input {
+		width: 300px;
+		margin: 0 -6px;
+	}
+/* END CSS for custom ranges */
