@@ -19,7 +19,7 @@ Full documentation is available in [docs/UserGuide.v3.1.md](docs/UserGuide.v3.1.
 
 ## Citing LazypipeX
 
-Weinstein I, Vapalahti O, Kant R, Smura T. *LazypipeX: Customizable Virome Analysis Pipeline Enabling Fast and Sensitive Virus Discovery from NGS data.* npj Viruses (2026, in press).
+Weinstein I, Vapalahti O, Kant R, Smura T. *LazypipeX: Customizable Virome Analysis Pipeline Enabling Fast and Sensitive Virus Discovery from NGS data.* npj Viruses (2026, under review).
 
 Earlier versions:
 
