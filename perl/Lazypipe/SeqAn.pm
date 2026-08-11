@@ -1505,7 +1505,7 @@ sub filter_host_reads{
 
 	if( !defined($args{r2}) ){ # SE-reads
 		system_call("bwa mem -t $args{numth} -T $args{bitscore} $args{hostdb} $args{r1} 1> $sam 2>> $args{log}");
-		system_call("sambamba view -t $args{numth} -S -F \"not(unmapped) and mapping_quality>=$args{mapq} and [AS]>=$args{bitscore}\" $sam 1> $sam.tmp 2>> $args{log}");
+		system_call("samtools view -@ $args{numth} -e '!flag.unmap && mapq>=$args{mapq} && [AS]>=$args{bitscore}' $sam 1> $sam.tmp 2>> $args{log}");
 		system_call("mv $sam.tmp $sam");
 		
 		if(nlines($sam)>0){
@@ -1534,7 +1534,7 @@ sub filter_host_reads{
 	}
 	else{ # PE-reads
 		system_call("bwa mem -t $args{numth} -T $args{bitscore} $args{hostdb} $args{r1} $args{r2} 1> $sam 2>> $args{log}");
-		system_call("sambamba view -t $args{numth} -S -F \"not(unmapped) and mapping_quality>=$args{mapq} and [AS]>=$args{bitscore}\" $sam 1> $sam.tmp 2>> $args{log}");
+		system_call("samtools view -@ $args{numth} -e '!flag.unmap && mapq>=$args{mapq} && [AS]>=$args{bitscore}' $sam 1> $sam.tmp 2>> $args{log}");
 		system_call("mv $sam.tmp $sam");
 		
 		if(nlines($sam)>0){
@@ -1640,7 +1640,7 @@ sub filter_host_contigs{
 	system("touch $args{log}");
 		
 	system_call("bwa mem -t $args{numth} -T $args{bitscore} $args{hostdb} $args{contigs} 1> $sam 2>> $args{log}");
-	system_call("sambamba view -t $args{numth} -S -F \"not(unmapped) and [AS]>=$args{bitscore}\" $sam 1> $sam2 2>> $args{log}");
+	system_call("samtools view -@ $args{numth} -e '!flag.unmap && [AS]>=$args{bitscore}' $sam 1> $sam2 2>> $args{log}");
 	system_call("mv $sam2 $sam");
 	
 	if(nlines($sam)>0){

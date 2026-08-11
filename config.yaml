@@ -3,8 +3,7 @@
 
 # GENERAL PARAMETERS
 general.parameters:
-   #call_R:                   "Rscript --no-save"
-   call_R:                   "singularity_wrapper exec Rscript --no-save"
+   call_R:                   "Rscript --no-save"
    min_read2hostgen_score:   100     # minimum alignment score for read mapping to hostgen
    min_read2hostgen_mapq:    0
    min_contig2hostgen_score: 300     # minimum alignment score for contig mapping to hostgen
@@ -63,6 +62,73 @@ webmode:            0
 
 # REFERENCE DATABASES FOR 1ST AND 2ND ROUND ANNOTATIONS
 ann.databases:
+   # --- core_nt (2026_07_18) -------------------------------------------------
+   # One versioned directory holds every core_nt artifact, flat.  The {vi,abv}
+   # suffixes and {blastn,minimap} prefixes keep the three databases distinct,
+   # so nothing collides and the whole directory can be moved between projects
+   # or servers as a self-contained unit.  install_db.pl extracts each archive
+   # into dirname(db), so the versioned directory is created automatically.
+   # taxdb.btd/.bti ship inside it, so blastn resolves taxid names with no
+   # $BLASTDB set.
+   minimap.core_nt:
+      db:      "$databases/core_nt.2026_07_18/minimap.core_nt.2026_07_18.fa"
+      name:    "core_nt.2026_07_18"
+      search:  "minimap"
+      url:     "NA"
+   minimap.core_nt.abv:
+      db:      "$databases/core_nt.2026_07_18/minimap.core_nt.abv.2026_07_18.fa"
+      name:    "core_nt.abv.2026_07_18"
+      search:  "minimap"
+      url:     "https://a3s.fi/lazypipe-db/2026/minimap.core_nt.abv.2026_07_18.tar.gz"
+   minimap.core_nt.vi:
+      db:      "$databases/core_nt.2026_07_18/minimap.core_nt.vi.2026_07_18.fa"
+      name:    "core_nt.vi.2026_07_18"
+      search:  "minimap"
+      url:     "https://a3s.fi/lazypipe-db/2026/minimap.core_nt.vi.2026_07_18.tar.gz"
+   blastn.core_nt:
+      # NCBI's own volume names are kept verbatim, so the prefix is `core_nt`
+      db:      "$databases/core_nt.2026_07_18/core_nt"
+      name:    "core_nt.2026_07_18"
+      search:  "blastn"
+      url:     "NA"
+   blastn.core_nt.abv:
+      db:      "$databases/core_nt.2026_07_18/blastn.core_nt.abv"
+      name:    "core_nt.abv.2026_07_18"
+      search:  "blastn"
+      url:     "https://a3s.fi/lazypipe-db/2026/blastn.core_nt.abv.2026_07_18.tar.gz"
+   blastn.core_nt.vi:
+      db:      "$databases/core_nt.2026_07_18/blastn.core_nt.vi"
+      name:    "core_nt.vi.2026_07_18"
+      search:  "blastn"
+      url:     "https://a3s.fi/lazypipe-db/2026/blastn.core_nt.vi.2026_07_18.tar.gz"
+
+   # --- RefSeq (release 236) -------------------------------------------------
+   # Same one-versioned-directory layout as core_nt and uniref100.  No *.mmi is
+   # shipped: the minimap archives contain the FASTA, and downstream users index
+   # it with minimizer settings suited to their data.
+   minimap.refseq.abv:
+      db:      "$databases/refseq.236/minimap.refseq.abv.fa"
+      name:    "refseq.abv.236"
+      search:  "minimap"
+      url:     "https://a3s.fi/lazypipe-db/2026/minimap.refseq.abv.236.tar.gz"
+   minimap.refseq.vi:
+      db:      "$databases/refseq.236/minimap.refseq.vi.fa"
+      name:    "refseq.vi.236"
+      search:  "minimap"
+      url:     "https://a3s.fi/lazypipe-db/2026/minimap.refseq.vi.236.tar.gz"
+   blastn.refseq.abv:
+      db:     "$databases/refseq.236/blastn.refseq.abv"
+      name:   "refseq.abv.236"
+      search: "blastn"
+      url:    "https://a3s.fi/lazypipe-db/2026/blastn.refseq.abv.236.tar.gz"
+   blastn.refseq.vi:
+      db:     "$databases/refseq.236/blastn.refseq.vi"
+      name:   "refseq.vi.236"
+      search: "blastn"
+      url:    "https://a3s.fi/lazypipe-db/2026/blastn.refseq.vi.236.tar.gz"
+
+   # --- nt (2025_01_12) — FROZEN ---------------------------------------------
+   # Retained as the record of what the published benchmarks used (§4.1).
    minimap.nt:
       db:      "$databases/nt.2025_01_12.fa"
       name:    "nt.2025_01_12.fa"
@@ -74,20 +140,10 @@ ann.databases:
       search:  "minimap"
       url:     "https://a3s.fi/lazypipe-db/minimap.nt.abv.2025_01_12.tar.gz"
    minimap.nt.vi:
-      db:      "$databases/nt.vi.2025_01_12.fa"
+      db:      "$databases/nt.2025_01_12/nt.vi.2025_01_12.fa"
       name:    "nt.vi.2025_01_12"
       search:  "minimap"
       url:     "https://a3s.fi/lazypipe-db/minimap.nt.vi.2025_01_12.tar.gz"
-   minimap.refseq.abv:
-      db:      "$databases/refseq.abv.release228.fa"
-      name:    "refseq.abv.release228"
-      search:  "minimap"
-      url:     "https://a3s.fi/lazypipe-db/minimap.refseq.abv.release228.tar.gz"
-   minimap.refseq.vi:
-      db:      "$databases/refseq.vi.release228.fa"
-      name:    "refseq.vi.release228"
-      search:  "minimap"
-      url:     "https://a3s.fi/lazypipe-db/minimap.refseq.vi.release228.tar.gz"
    blastn.nt:
       db:     "$databases/blast/2025_01_12/nt"
       name:   "nt.2025_01_12"
@@ -103,46 +159,37 @@ ann.databases:
       name:   "nt.vi.2025_01_12"
       search: "blastn"
       url:    "https://a3s.fi/lazypipe-db/blastn.nt.vi.2025_01_12.tar.gz"
-   blastn.refseq.abv:
-      db:     "$databases/blastn.refseq.abv.release228"
-      name:   "refseq.abv.release228"
-      search: "blastn"
-      url:    "https://a3s.fi/lazypipe-db/blastn.refseq.abv.release228.tar.gz"
-   blastn.refseq.vi:
-      db:     "$databases/blastn.refseq.vi.release228"
-      name:   "refseq.vi.release228"
-      search: "blastn"
-      url:    "https://a3s.fi/lazypipe-db/blastn.refseq.vi.release228.tar.gz"
+   # --- UniRef100 (2026_02) --------------------------------------------------
    blastp.uniref100.abv:
-      db:     "$databases/blastp.uniref100.abv.2024_11_27"
-      name:   "uniref100.abv.2024_11_27"
+      db:     "$databases/uniref100.2026_02/blastp.uniref100.abv"
+      name:   "uniref100.abv.2026_02"
       search: "blastp"
-      url:    "https://a3s.fi/lazypipe-db/blastp.uniref100.abv.2024_11_27.tar.gz"
+      url:    "https://a3s.fi/lazypipe-db/2026/blastp.uniref100.abv.v2026_02.tar.gz"
    blastp.uniref100.vi:
-      db:     "$databases/blastp.uniref100.vi.2024_11_27"
-      name:   "uniref100.vi.2024_11_27"
+      db:     "$databases/uniref100.2026_02/blastp.uniref100.vi"
+      name:   "uniref100.vi.2026_02"
       search: "blastp"
-      url:    "https://a3s.fi/lazypipe-db/blastp.uniref100.vi.2024_11_27.tar.gz"
+      url:    "https://a3s.fi/lazypipe-db/2026/blastp.uniref100.vi.v2026_02.tar.gz"
    diamondx.uniref100.abv:
-      db:     "$databases/diamond.uniref100.abv.2024_11_27.dmnd"
-      name:   "uniref100.abv.2024_11_27"
+      db:     "$databases/uniref100.2026_02/diamond.uniref100.abv.dmnd"
+      name:   "uniref100.abv.2026_02"
       search: "diamondx"
-      url:    "https://a3s.fi/lazypipe-db/diamond.uniref100.abv.2024_11_27.dmnd.tar.gz"
+      url:    "https://a3s.fi/lazypipe-db/2026/diamond.uniref100.abv.v2026_02.dmnd.gz"
    diamondx.uniref100.vi:
-      db:     "$databases/diamond.uniref100.vi.2024_11_27.dmnd"
-      name:   "uniref100.vi.2024_11_27"
+      db:     "$databases/uniref100.2026_02/diamond.uniref100.vi.dmnd"
+      name:   "uniref100.vi.2026_02"
       search: "diamondx"
-      url:    "https://a3s.fi/lazypipe-db/diamond.uniref100.vi.2024_11_27.dmnd.tar.gz"
+      url:    "https://a3s.fi/lazypipe-db/2026/diamond.uniref100.vi.v2026_02.dmnd.gz"
    diamondp.uniref100.abv:
-      db:     "$databases/diamond.uniref100.abv.2024_11_27.dmnd"
-      name:   "uniref100.abv.2024_11_27"
+      db:     "$databases/uniref100.2026_02/diamond.uniref100.abv.dmnd"
+      name:   "uniref100.abv.2026_02"
       search: "diamondp"
-      url:    "https://a3s.fi/lazypipe-db/diamond.uniref100.abv.2024_11_27.dmnd.tar.gz"
+      url:    "https://a3s.fi/lazypipe-db/2026/diamond.uniref100.abv.v2026_02.dmnd.gz"
    diamondp.uniref100.vi:
-      db:     "$databases/diamond.uniref100.vi.2024_11_27.dmnd"
-      name:   "uniref100.vi.2024_11_27"
+      db:     "$databases/uniref100.2026_02/diamond.uniref100.vi.dmnd"
+      name:   "uniref100.vi.2026_02"
       search: "diamondp"
-      url:    "https://a3s.fi/lazypipe-db/diamond.uniref100.vi.2024_11_27.dmnd.tar.gz"
+      url:    "https://a3s.fi/lazypipe-db/2026/diamond.uniref100.vi.v2026_02.dmnd.gz"
    blastn.rdp:
       db:     "$databases/blastn.rdp_16S_trainset19"
       name:   "rdp_16S_trainset19"
@@ -164,12 +211,12 @@ ann.databases:
       search: "blastn"
       url:    "https://a3s.fi/lazypipe-db/blastn.SILVA_138.2_SSURef_NR99.tar.gz"
    hmmscan.pfam.vi:
-      db:     "$databases/hmm.pfam.vi.2024_05"
+      db:     "$databases/hmm/hmm.pfam.vi.2024_05"
       name:   "pfam.vi.2024_05"
       search: "hmmscan"
       url:    "https://a3s.fi/lazypipe-db/hmm.pfam.vi.2024_05.tar.gz"
    hmmscan.rdrp:
-      db:     "$databases/hmm.NeoRdRp.2.1"
+      db:     "$databases/hmm/hmm.NeoRdRp.2.1"
       name:   "NeoRdRp.2.1"
       search: "hmmscan"
       url:    "https://a3s.fi/lazypipe-db/hmm.NeoRdRp.2.1.tar.gz"
@@ -191,8 +238,8 @@ ann.databases:
       db:     "$databases/nr_cluster_seq.vi.v20251006"
       name:   "BLAST index for nr_cluster_seq v20251006"
       search: "blastp"
-      url:    "https://a3s.fi/lazypipe-db/nr_cluster_seq.vi.v20251006.tar.gz"      
-      
+      url:    "https://a3s.fi/lazypipe-db/nr_cluster_seq.vi.v20251006.tar.gz"
+
 
 # ANNOTATION STRATEGIES: call with --anns strategy
 ann.strategies:
@@ -229,7 +276,7 @@ host.databases:
    Aedes_albopictus:
       accession:  "GCF_035046485.1"
       db:         "$hostgenomes/GCF_035046485.1_genomic+rna.fna.gz"
-      name:       "Aedes albopictus genomic+rna"      
+      name:       "Aedes albopictus genomic+rna"
       latinName:  "Aedes albopictus"
       commonName: "Asian tiger mosquito"
       url:        "https://a3s.fi/lazypipe-hostgen/GCF_035046485.1_genomic+rna.tar.gz"
@@ -253,7 +300,7 @@ host.databases:
       name:        "Culex laticinctus genomic+rna"
       latinName:   "Culex laticinctus"
       commonName:  "mosquito"
-      url:         "https://a3s.fi/lazypipe-hostgen/GCA_964187845.1_genomic.tar.gz"      
+      url:         "https://a3s.fi/lazypipe-hostgen/GCA_964187845.1_genomic.tar.gz"
    Bos_taurus:
       accession:  "GCF_002263795.3"
       db:         "$hostgenomes/GCF_002263795.3_genomic+rna.fna.gz"
@@ -295,7 +342,7 @@ host.databases:
       taxid:      "9606"
       url:        "https://a3s.fi/lazypipe-hostgen/GCF_000001405.40_genomic+rna.tar.gz"
    Macaca_mulatta:
-      accession:  "GCA_003339765.3"   
+      accession:  "GCA_003339765.3"
       db:         "$hostgenomes/GCA_003339765.3_genomic+rna.fna.gz"
       name:       "Rhesus macaque genomic+rna"
       latinName:  "Macaca mulatta"
@@ -398,15 +445,14 @@ host.databases:
       url:        "https://a3s.fi/lazypipe-hostgen/GCA_963971475.1_genomic.tar.gz"
 
 taxonomy:
-   db:            "$data/taxonomy"
+   db:            "$taxonomy_ncbi"
    name:          "NCBI taxonomy"
    update:        0 # 1 => update, 0 => don't update
    update_time:   5 # in days
    url:           "ftp://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz"
 
-   
+
 ICTV.VMR:
    db:            "/scratch/project_2003755/taxonomy/ICTV/VMR_MSL40.v1.20250307.tsv"
    name:          "ICTV VMR tables"
    url:           "https://ictv.global/sites/default/files/VMR/VMR_MSL40.v1.20250307.xlsx"
-

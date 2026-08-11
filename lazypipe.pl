@@ -808,7 +808,7 @@ sub realign_reads_contigs{
 		system_call("bwa mem -t $opt{numth} $contigs $r1 $r2 1> $sam 2>> $log");
 	}
 	
-	system_call("sambamba view -t $opt{numth} -S -h -F \"not(unmapped) and mapping_quality>=$opt{min_read2contig_mapq} and [AS]>=$opt{min_read2contig_score}\" $sam 1> $sam.tmp 2>> $log");
+	system_call("samtools view -@ $opt{numth} -h -e '!flag.unmap && mapq>=$opt{min_read2contig_mapq} && [AS]>=$opt{min_read2contig_score}' $sam 1> $sam.tmp 2>> $log");
 	system_call("mv $sam.tmp $sam");
 	system_call("samtools sort -@ $opt{numth} -n -T $opt{tmpdir} $sam | ".					# sort by read name
 				"samtools view -F4 -h 1> $sam.tmp 2>> $log");

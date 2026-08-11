@@ -103,7 +103,9 @@ We recommend installing *BLAST* under a separate *Conda* environment labeled `bl
 
 All other dependencies can be installed under environment labeled `Lazypipe`:
 
-    conda create -n lazypipe -c bioconda -c eclarke bwa csvtk fastp krona megahit mga minimap2 samtools seqkit spades taxonkit trimmomatic numpy scipy requests
+    conda create -n lazypipe -c bioconda -c eclarke bwa csvtk fastp krona megahit mga minimap2 "samtools>=1.12" seqkit spades taxonkit trimmomatic numpy scipy requests
+
+Note the quotes around `"samtools>=1.12"`: without them the shell reads `>` as a redirection. Lazypipe filters alignments with *Samtools* filter expressions (`samtools view -e`), which were introduced in *Samtools 1.12*. Earlier versions will fail during host filtering and read realignment.
 
 *Mac users*  installing to *M1/M2 ARM64 architecture*: Prior to installing bio-packages configure *Conda* with `conda config --add subdirs osx-64`. You may also need to install `MGA` binary manually (see Table 1).
 
@@ -155,12 +157,13 @@ Then copy or link these executables to your ~/bin folder. For example:
 | PANNZER/SANS   | http://ekhidna2.biocenter.helsinki.fi/sanspanz/ | [SANSPANZ.3.tar.gz](http://ekhidna2.biocenter.helsinki.fi/sanspanz/SANSPANZ.3.tar.gz)                | https://doi.org/10.1002/pro.4193
 | TaxonKit       | https://bioinf.shenwei.me/taxonkit/   | [taxonkit/releases](https://github.com/shenwei356/taxonkit/releases) | https://doi.org/10.1016/j.jgg.2021.03.006
 | [Trimmomatic]  | https://github.com/usadellab/Trimmomatic  | [v0.39.tar.gz](https://github.com/usadellab/Trimmomatic/archive/refs/tags/v0.39.tar.gz) | https://doi.org/10.1093/bioinformatics/btu170
-| Samtools       | http://www.htslib.org/          | [samtools/releases](https://github.com/samtools/samtools/releases/) | https://doi.org/10.1093/gigascience/giab008
+| Samtools (>=1.12) | http://www.htslib.org/          | [samtools/releases](https://github.com/samtools/samtools/releases/) | https://doi.org/10.1093/gigascience/giab008
 | SeqKit         | https://bioinf.shenwei.me/seqkit/   | [seqkit/releases](https://github.com/shenwei356/seqkit/releases/) | https://doi.org/10.1371/journal.pone.0163962
 | [SPAdes]       | https://github.com/ablab/spades   | [SPAdes/releases](https://github.com/ablab/spades/releases) | https://doi.org/10.1002/cpbi.102
 
 **Table 1**: Lazypipe dependencies.
 Tools in square brackets are not required for basic Lazypipe runs. When installed, these will provide additional functionalities.
+Version constraints in parentheses are minimums: *Samtools* must be 1.12 or newer, as Lazypipe relies on filter expressions (`samtools view -e`) added in that release.
 
 
 <a id="InstallingPerlModules"></a>

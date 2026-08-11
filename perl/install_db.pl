@@ -12,7 +12,7 @@ use Cwd qw(getcwd);
 # credit: Ilya Plyusnin, University of Helsinki, Ilja.Pljusnin@helsinki.fi
 #
 my $install_dir	= defined($ENV{'LAZYPIPE_INSTALL_DIR'}) ? $ENV{'LAZYPIPE_INSTALL_DIR'} : dirname(__FILE__);
-my $config	= "$install_dir/config.yaml";
+my $config 	= (-e getcwd()."/config.yaml") ? getcwd()."/config.yaml" : "$install_dir/config.yaml";
 my $dbname	= undef;
 my $url		= undef;
 my $path		= undef;
@@ -85,7 +85,7 @@ if( defined($opt{'host.databases'}->{"$dbname"})){
 }
 foreach my $k(keys %{$opt{'ann.databases'}}){
 	my $db	= $opt{'ann.databases'}->{$k};
-	if(	$dbname eq $k 
+	if(	$dbname eq $k
 		|| $dbname eq $db->{name}){
 		install_db($db);
 		exit(0);
@@ -93,7 +93,7 @@ foreach my $k(keys %{$opt{'ann.databases'}}){
 }
 foreach my $k(keys %{$opt{'host.databases'}}){
 	my $db	= $opt{'host.databases'}->{$k};
-	if(	$dbname eq $k 
+	if(	$dbname eq $k
 		|| $dbname eq $db->{latinName}
 		|| $dbname eq $db->{commonName}){
 		install_db($db);
@@ -110,7 +110,7 @@ if($dbname eq 'hostdbs'){
 			my $e = $@;
         		print STDERR "\tINSTALLATION FAILED: $e\n";
 		};
-		
+
 	}
 	exit(0);
 }
@@ -132,7 +132,7 @@ print STDERR "\n--db $dbname did not match any database in $config\n";
 # INSTALL reference/host-genome database
 sub install_db{
 	my $db 		= shift(@_);
-	
+
 	if($VERBAL){
 		print STDERR "\n\tname      : $db->{name}\n";
 		print STDERR "\tdatabase  : $db->{db}\n";
@@ -149,7 +149,7 @@ sub install_db{
 			$dbdir_exp =~ s/\$$envar/$ENV{$envar}/g;
 		}
 	}
-	
+
 	my @dbfiles_ondisk	= glob("$dbdir_exp/$dbfile*");
 	if(!$FORCE && scalar(@dbfiles_ondisk)>0){
 		print STDERR "\tskipping: found files on disk (use --force to overwrite):\n";
@@ -168,18 +168,18 @@ sub install_db{
 
 sub install_taxonomy{
 	my $taxonomy 		= shift(@_);
-	
+
 	# Check if taxonomy already up-to-date
 	my $taxonomy_nodes	= "$taxonomy->{db}/nodes.dmp";
-	if( (-e "$taxonomy_nodes") 
-			&& ((-M "$taxonomy_nodes") <= $taxonomy->{update_time}) 
+	if( (-e "$taxonomy_nodes")
+			&& ((-M "$taxonomy_nodes") <= $taxonomy->{update_time})
 			&&  !$FORCE){
 		if($VERBAL){
 			print STDERR "\ttaxonomy up to date. Use --force to overwrite\n";
 		}
 		return;
 	}
-	
+
 	system_call("wget -q $taxonomy->{url} -O $taxonomy->{db}/taxdump.tar.gz");
 	system_call("tar -xzf $taxonomy->{db}/taxdump.tar.gz -C $taxonomy->{db}");
 }
@@ -191,7 +191,7 @@ sub install_taxonomy{
 #
 # $system_call	String with the system call to excecute
 # $v	erbal		Defaults to $NGSlib::VERBAL
-# 
+#
 sub system_call{
 	my $call		= shift;
 	my $verbal	= (scalar(@_)>0) ? shift(@_): ( defined($VERBAL) ? $VERBAL : 0 );
