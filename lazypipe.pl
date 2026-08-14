@@ -15,7 +15,7 @@ use Lazypipe::SeqAn;
 
 #
 # LAZYPIPE: NGS PIPELINE FOR VIRUS DISCOVERY AND METAGENOMICS
-# 
+#
 # PERL INTERFACE
 #
 # Credit:
@@ -23,7 +23,7 @@ use Lazypipe::SeqAn;
 # Plyusnin, I., Vapalahti, O., Sironen, T., Kant, R., & Smura, T. (2023).
 # Enhanced Viral Metagenomics with Lazypipe 2. Viruses, 15(2), 431.
 #
-# Plyusnin,I., Kant,R., Jaaskelainen,A.J., Sironen,T., Holm,L., Vapalahti,O. and Smura,T. (2020) 
+# Plyusnin,I., Kant,R., Jaaskelainen,A.J., Sironen,T., Holm,L., Vapalahti,O. and Smura,T. (2020)
 # Novel NGS Pipeline for Virus Discovery from a Wide Spectrum of Hosts and Sample Types. Virus Evolution, veaa091
 #
 # Contact: grp-lazypipe@helsinki.fi
@@ -43,7 +43,8 @@ my $PIPELINE_NAME		= "Lazypipe";
 my $PIPELINE_VERSION		= "3.1";
 
 
-my $usage= 	"\nUSAGE: $0 -1 file [-2 file] -r|res dir -s|sample str -p main\n".
+my $usage= 	"\n$PIPELINE_NAME $PIPELINE_VERSION\n".
+		"\nUSAGE: $0 -1 file [-2 file] -r|res dir -s|sample str -p main\n".
 		"\n".
 		"Input:\n".
 		"-1|read1 file    : PE forward reads in fastq\n".
@@ -54,7 +55,7 @@ my $usage= 	"\nUSAGE: $0 -1 file [-2 file] -r|res dir -s|sample str -p main\n".
 		"--config file    : Configuration file [$config_file]\n".
 		"\n".
 		"Output:\n".
-		"--logs   dir     : Root directory for logs [logs]. Logs will be printed to logs-dir/sample/\n".		
+		"--logs   dir     : Root directory for logs [logs]. Logs will be printed to logs-dir/sample/\n".
 		"-r|res   dir     : Root directory for results [results]. Results will be printed to res-dir/sample/\n".
 		"-s|sample str    : Sample label [read1 filename]\n".
 		"--tmpdir dir     : Root for temporary directory\n".
@@ -73,7 +74,7 @@ my $usage= 	"\nUSAGE: $0 -1 file [-2 file] -r|res dir -s|sample str -p main\n".
 		"     pack           : Pack results to a tarball\n".
 		"     clean          : Clean up intermediate/temporary files.\n".
 		"     main           : Run main steps: pre,flt,ass,rea,ann1,ann2,rep,sta,pack,clean [default]\n".
-		"     all            : Run all steps: pre,flt,ass,rea,ann1,ann2,rep,rgrep,sta,pack,clean\n".		
+		"     all            : Run all steps: pre,flt,ass,rea,ann1,ann2,rep,rgrep,sta,pack,clean\n".
 		"--ann1 key       : List of database keys defining 1st round annotation\n".
 		"                   For each key their MUST be a database defined in config.yaml\n".
 		"                   e.g. --ann1 minimap.nt.abv\n".
@@ -102,7 +103,7 @@ my $usage= 	"\nUSAGE: $0 -1 file [-2 file] -r|res dir -s|sample str -p main\n".
 		"Plyusnin,I., Kant,R., Jaaskelainen,A.J., Sironen,T., Holm,L., Vapalahti,O. and Smura,T. (2020)\n".
 		"Novel NGS Pipeline for Virus Discovery from a Wide Spectrum of Hosts and Sample Types. Virus Evolution, veaa091\n\n".
 		"CONTACT:\n".
-		"grp-lazypipe\@helsinki.fi\n\n"; 
+		"grp-lazypipe\@helsinki.fi\n\n";
 
 
 # Read options from config.yaml
@@ -113,6 +114,10 @@ my $yaml 			= YAML::Tiny->read( $config_file );
 my %opt 				= %{$yaml->[0]};
 my $commandline 		= join " ", $0, @ARGV;
 my $time 			= strftime "%Y/%m/%d %H:%M:%S", localtime;
+	# pass_through above is only for the --config pre-scan: it must be switched
+	# off again, or the main GetOptions below silently discards every option it
+	# does not recognize and the run proceeds on defaults.
+Getopt::Long::Configure("no_pass_through");
 GetOptions(\%opt, 'read1|1=s','read2|2=s','se','res|r=s','logs=s','tmpdir=s','sample|s=s','numth|t=i',
 			'pre=s','ass=s','gen=s','ann1|annot1=s','ann2|annot2=s','anns|annstrat=s','append','hostgen=s','hgtaxid=i','wmodel|w=s',
 			'min_read2hostgen_score=i',
@@ -174,14 +179,14 @@ clean(\%opt) if( $pipe{clean} );
 
 sub pipe_annotation_round1{
 	print STDERR "# ANNOTATION ROUND1\n";
-	
+
 	my $subid			= "pipe_annotation_round1()";
-	
+
 	# IN
 	my %opt				= %{shift()};
 	my $contigs 			= "$opt{res}/contigs.fa";
 	my $contigs_info		= "$contigs.info.tsv";
-	
+
 	# OUT
 	my $contigs_ann1_ab		= "$opt{res}/contigs.ann1.ab.fa";
 	my $contigs_ann1_vi		= "$opt{res}/contigs.ann1.vi.fa";
@@ -208,7 +213,7 @@ sub pipe_annotation_round1{
 	my $log_sans				= "$opt{logs}/$opt{sample}/annot.sans.log";
 	my $log_report			= "$opt{logs}/$opt{sample}/generate_reports.log";
 	my $log_rgreport			= "$opt{logs}/$opt{sample}/generate_rgreports.log";
-	
+
 	# PARAMS
 	my $cond_ab		= "\'\$division==\"Bacteria\"'";
 	my $cond_vi		= "\'\$division==\"Viruses\" && \$bphage==\"no\"\'";
@@ -224,10 +229,10 @@ sub pipe_annotation_round1{
 		print STDERR "\n\tWARNING: $subid: empty contig file: no annotations will be produced\n\n";
 		return;
 	}
-	
+
 	foreach my $ann(@anns){
 		my $contigs_ta 	= ($ann->{target} eq 'un') ? $contigs_ann1_un : $contigs;	# just two options in ann1
-		
+
 		if($ann->{search} eq "minimap"){
 			annotate_minimap(seqs		=>$contigs_ta,
 							db			=>$ann->{db},
@@ -239,7 +244,7 @@ sub pipe_annotation_round1{
 							min_bits		=>$opt{min_minimap_DPpeak_score},
 							numth		=>$opt{numth},
 							retain_ties	=>0);
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_minimap");}
 		}
 		elsif($ann->{search} eq "sans"){
@@ -255,7 +260,7 @@ sub pipe_annotation_round1{
 							orf_finder	=>$opt{gen},
 							min_orf_length=>$opt{min_orf_length},
 							retain_ties =>0);
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_sans");}
 		}
 		elsif($ann->{search} eq "blastn"){
@@ -268,7 +273,7 @@ sub pipe_annotation_round1{
 							numth		=> $opt{numth},
 							min_bits		=> $opt{min_blastn_bits},
 							retain_ties => 0);
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_blastn");}
 		}
 		elsif($ann->{search} eq "blastp"){
@@ -278,13 +283,13 @@ sub pipe_annotation_round1{
 							dbhits		=>$dbhits_blastp,
 							annot		=>$annot1,
 							append		=>$append,
-							log			=>$log_blastp, 
+							log			=>$log_blastp,
 							numth			=>$opt{numth},
 							min_bits			=>$opt{min_blastp_bits},
 							orf_finder		=>$opt{gen},
 							min_orf_length	=>$opt{min_orf_length},
 							retain_ties		=>0);
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_blastp");}
 		}
 		elsif($ann->{search} eq "blastx"){
@@ -294,13 +299,13 @@ sub pipe_annotation_round1{
 							dbhits		=>$dbhits_blastx,
 							annot		=>$annot1,
 							append		=>$append,
-							log			=>$log_blastx, 
+							log			=>$log_blastx,
 							numth			=>$opt{numth},
 							min_bits			=>$opt{min_blastp_bits},
 							retain_ties		=>0);
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_blastp");}
-		}		
+		}
 		elsif($ann->{search} eq "diamondx"){
 			annotate_diamondx(seqs		=>$contigs_ta,
 							  db			=>$ann->{db},
@@ -309,7 +314,7 @@ sub pipe_annotation_round1{
 							  append		=>$append,
 							  filter_tophits=> 1,
 							  retain_ties	=> 0,
-							  log		=>$log_diamondx, 
+							  log		=>$log_diamondx,
 							  numth		=>$opt{numth},
 							  min_score	=>$opt{min_diamond_bits},
 							  min_orf	=>$opt{min_orf_length},
@@ -325,7 +330,7 @@ sub pipe_annotation_round1{
 							  annot		=>$annot1,
 							  append		=>$append,
 							  dbhits		=>$dbhits_diamondp,
-							  log		=>$log_diamondp, 
+							  log		=>$log_diamondp,
 							  filter_tophits=> 1,
 							  retain_ties	=> 0,
 							  numth		=>$opt{numth},
@@ -337,7 +342,7 @@ sub pipe_annotation_round1{
 							  tmpdir		=>$opt{tmpdir});
 			if($opt{clear}){		system("rm -f $dbhits_diamondp");}
 		}
-		
+
 		elsif($ann->{search} eq "hmmscan"){
 			annotate_hmmscan(annot		=>$annot1,
 							append		=>$append,
@@ -360,7 +365,7 @@ sub pipe_annotation_round1{
 			next;
 		}
 		filter_unseqs(seqs=>$contigs, seqs_un=>$contigs_ann1_un, annot=>$annot1, seqidh=>'qseqid', log=>$log_fltcont);
-		
+
 		# in consecutive steps append
 		$append		= 1;
 	}
@@ -375,13 +380,13 @@ sub pipe_annotation_round1{
 }
 sub pipe_annotation_round2{
 	print STDERR "# ANNOTATION ROUND2\n";
-	
+
 	my $subid			= "pipe_annotation_round2()";
 	# IN
 	my %opt				= %{shift()};
 	my $contigs 			= "$opt{res}/contigs.fa";
 	my $contigs_info		= "$contigs.info.tsv";
-	
+
 	# OUT
 	my $contigs_ann2_ab		= "$opt{res}/contigs.ann2.ab.fa";
 	my $contigs_ann2_vi		= "$opt{res}/contigs.ann2.vi.fa";
@@ -408,7 +413,7 @@ sub pipe_annotation_round2{
 	my $log_sans				= "$opt{logs}/$opt{sample}/annot.sans.log";
 	my $log_report			= "$opt{logs}/$opt{sample}/generate_reports.log";
 	my $log_rgreport			= "$opt{logs}/$opt{sample}/generate_rgreports.log";
-	
+
 	# PARAMS
 	my $cond_ab		= "\'\$division==\"Bacteria\"'";
 	my $cond_vi		= "\'\$division==\"Viruses\" && \$bphage==\"no\"\'";
@@ -416,18 +421,18 @@ sub pipe_annotation_round2{
 	my @anns 		= @{$opt{ann2}};
 	my $append 		= $opt{append};
 	my %targets 		= ();
-	
-	
+
+
 	foreach my $ann(@anns){
-		
+
 		my $contigs_ta 				= sprintf("$opt{res}/contigs.ann1.%s.fa", $ann->{target});
 		$targets{$ann->{target}} 	= 1;
-		
+
 		if(!(-e $contigs_ta) || nlines($contigs_ta)<2){
 			print STDERR "WARNING: $subid: empty contigs fasta: skipping\n";
 			next;
 		}
-		
+
 		if($ann->{search} eq 'blastn'){
 			annotate_blastn(	seqs		=> $contigs_ta,
 							db		=> $ann->{db},
@@ -437,22 +442,22 @@ sub pipe_annotation_round2{
 							log		=> $log_blastn,
 							numth	=> $opt{numth},
 							min_bits=> $opt{min_blastn_bits});
-							
-			if($opt{clear}){		system("rm -f $dbhits_blastn");}	
+
+			if($opt{clear}){		system("rm -f $dbhits_blastn");}
 		}
 		elsif($ann->{search} eq "blastp"){
 			annotate_blastp(seqs			=>$contigs_ta,
 							seqinfo		=>$contigs_info,
 							db			=>$ann->{db},
-							dbhits		=>$dbhits_blastp,							
+							dbhits		=>$dbhits_blastp,
 							annot		=>$annot2,
 							append		=>$append,
-							log			=>$log_blastp, 
+							log			=>$log_blastp,
 							numth			=>$opt{numth},
 							min_bits			=>$opt{min_blastp_bits},
 							orf_finder		=>$opt{gen},
 							min_orf_length	=>$opt{min_orf_length});
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_blastp");}
 		}
 		elsif($ann->{search} eq "blastx"){
@@ -462,13 +467,13 @@ sub pipe_annotation_round2{
 							dbhits		=>$dbhits_blastx,
 							annot		=>$annot2,
 							append		=>$append,
-							log			=>$log_blastx, 
+							log			=>$log_blastx,
 							numth			=>$opt{numth},
 							min_bits			=>$opt{min_blastp_bits},
 							retain_ties		=>0);
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_blastp");}
-		}	
+		}
 		elsif($ann->{search} eq "minimap"){
 			annotate_minimap(seqs		=>$contigs_ta,
 							db			=>$ann->{db},
@@ -479,7 +484,7 @@ sub pipe_annotation_round2{
 							min_bits		=>$opt{min_minimap_DPpeak_score},
 							numth		=>$opt{numth},
 							taxonomy		=>$opt{taxonomy}->{db});
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_minimap");}
 		}
 		elsif($ann->{search} eq "sans"){
@@ -493,7 +498,7 @@ sub pipe_annotation_round2{
 							numth		=>$opt{numth},
 							orf_finder	=>$opt{gen},
 							min_orf_length=>$opt{min_orf_length});
-							
+
 			if($opt{clear}){		system("rm -f $dbhits_sans");}
 		}
 		elsif($ann->{search} eq "hmmscan"){
@@ -532,7 +537,7 @@ sub pipe_annotation_round2{
 	}
 	if( defined($targets{vi}) ){
 		filter_seqs(seqs=>$contigs,seqs_flt=>$contigs_ann2_vi,annot=>$annot2,seqidh=>'qseqid',condition=>$cond_vi, log=>$log_fltcont);
-	}	
+	}
 	if( defined($targets{ab}) && defined($targets{vi}) ){
 		filter_unseqs(seqs=>$contigs,seqs_un=>$contigs_ann2_un,annot=>$annot2,seqidh=>'qseqid', log=>$log_fltcont);
 	}
@@ -543,12 +548,12 @@ sub pipe_annotation_round2{
 sub pipe_preprocess{
 	print STDERR "\n\n# PREPROCESS READS\n\n";
 	my $subid		= "pipe_preprocess()";
-	
+
 	# in:
 	my %opt 			= %{shift() };
 	my $r1 			= $opt{'read1'};
 	my $r2			= $opt{'read2'} || undef;
-	
+
 	# out:
 	my $p1			= "$opt{res}/reads/read1.trim.fq.gz";
 	my $up1			= "$opt{res}/reads/read1.trim.unpaired.fq.gz";
@@ -557,14 +562,14 @@ sub pipe_preprocess{
 	my $log  		= "$opt{logs}/$opt{sample}/prepro_reads.log";
 	my $fastp_html	= "$opt{res}/reports/fastp.report.html";
 	my $fastp_json	= "$opt{res}/reports/fastp.json";
-	
+
 	system("rm -f $log");
 	system("touch $log");
 	system("mkdir -p $opt{res}/reads");
-	
+
 	if( $opt{'se'} ){ # SE-reads
 		if( $opt{'pre'} eq 'fastp' ){
-			system_call("fastp --thread $opt{'numth'} -j $fastp_json -h $fastp_html -i $r1 -o $p1 $opt{'par_fastp'}  2>> $log", $opt{'v'});			
+			system_call("fastp --thread $opt{'numth'} -j $fastp_json -h $fastp_html -i $r1 -o $p1 $opt{'par_fastp'}  2>> $log", $opt{'v'});
 		}
 		elsif( $opt{'pre'} eq 'trimm' ){
 			system_call("trimmomatic SE -threads $opt{'numth'} $r1 $p1 $opt{'par_trimm'} &>> $log", $opt{'v'});
@@ -589,32 +594,32 @@ sub pipe_preprocess{
 			system_call("cp $r2 $p2", $opt{'v'});
 		}
 	}
-	
+
 	# rm temp
 	#system("rm -f $fastp_json");
 }
 
 sub pipe_filter_hostreads{
 	my $subid 		= "pipe_filter_hostreads()";
-	
+
 	# IN:
 	my %opt			= %{shift()};
 	my $r1			= "$opt{res}/reads/read1.trim.fq.gz";
 	my $r2	        = ($opt{se})? undef: "$opt{res}/reads/read2.trim.fq.gz";
-	
+
 	foreach my $hostdb( @{$opt{hostdb}} ){
-		
+
 		my $hostpref		= $hostdb->{latinName} || $hostdb->{commonName} || $hostdb->{name} || $hostdb->{db};
 		$hostpref		=~ s/\..*$//g;
 		$hostpref		=~ s/\s/_/g;
-		
+
 		my $r1_pass		= "$opt{res}/reads/read1.trim.hflt.fq.gz";
 		my $r1_pass_tmp	= "$opt{res}/reads/read1.trim.hflt.tmp.fq.gz";	# in case $r1 and $r1_pass are the same file
 		my $r1_flt		= "$opt{res}/reads/$hostpref.read1.fq.gz";
 		my $r2_pass		= ($opt{se})? undef: "$opt{res}/reads/read2.trim.hflt.fq.gz";
 		my $r2_pass_tmp	= ($opt{se})? undef: "$opt{res}/reads/read2.trim.hflt.tmp.fq.gz";
 		my $r2_flt		= ($opt{se})? undef: "$opt{res}/reads/$hostpref.read2.fq.gz";
-			
+
 		filter_host_reads(
 			r1 			=> $r1,
 			r1_pass		=> $r1_pass_tmp,
@@ -630,12 +635,12 @@ sub pipe_filter_hostreads{
 			mapq			=> $opt{min_read2hostgen_mapq},
 			tmpdir 		=> $opt{tmpdir} || undef,
 			gzip			=> $opt{gzip});
-		
+
 		if(-e $r1_pass_tmp){
 			system("mv $r1_pass_tmp $r1_pass");		}
 		if(-e $r2_pass_tmp){
 			system("mv $r2_pass_tmp $r2_pass");		}
-		
+
 		# channel $r1/2_pass to the next host-filter input
 		$r1		= $r1_pass;
 		$r2		= $r2_pass || undef;
@@ -644,25 +649,25 @@ sub pipe_filter_hostreads{
 
 sub pipe_filter_hostcont{
 	my $subid		= "pipe_filter_hostcont()";
-	
+
 	# IN:
 	my %opt			= %{shift()};
 	my $contigs		= "$opt{res}/contigs.fa";
-	
+
 	if(nlines($contigs)<2){
 		return;
 	}
-	
+
 	if( defined($opt{hostdb}) )	{
 		foreach my $hostdb( @{$opt{hostdb}} ){
-		
+
 			my $hostpref		= $hostdb->{latinName} || $hostdb->{commonName} || $hostdb->{name} || $hostdb->{db};
 			$hostpref		=~ s/\..*$//g;
 			$hostpref		=~ s/\s/_/g;
-			
+
 			my $contigs_pass	= "$opt{res}/contigs.pass.fa";
 			my $contigs_flt	= "$opt{res}/$hostpref.contigs.fa";
-		
+
 			filter_host_contigs(
 				contigs 		=> $contigs,
 				contigs_pass=> $contigs_pass,
@@ -673,7 +678,7 @@ sub pipe_filter_hostcont{
 				numth		=> $opt{numth},
 				bitscore		=> $opt{min_contig2hostgen_score},
 				tmpdir 		=> $opt{tmpdir} || undef);
-			
+
 			system("mv $contigs_pass $contigs");
 		}
 	}
@@ -682,14 +687,14 @@ sub pipe_filter_hostcont{
 
 
 sub pipe_assemble{
-	print STDERR "\n\n# ASSEMBLE\n\n";	
-	
+	print STDERR "\n\n# ASSEMBLE\n\n";
+
 	my $subid	= "pipe_assemble()";
 	# in:
 	my %opt 		= %{shift()};
 	my $r1 		= (-e "$opt{res}/reads/read1.trim.hflt.fq.gz") ? "$opt{res}/reads/read1.trim.hflt.fq.gz" : "$opt{res}/reads/read1.trim.fq.gz";
 	my $r2		= (-e "$opt{res}/reads/read2.trim.hflt.fq.gz") ? "$opt{res}/reads/read2.trim.hflt.fq.gz" : "$opt{res}/reads/read2.trim.fq.gz";
-	
+
 	# out:
 	my $contigs 			= "$opt{res}/contigs.fa";
 	my $contigs_host		= "$opt{res}/contigs.host.fa";
@@ -697,16 +702,16 @@ sub pipe_assemble{
 	my $orfs_nt			= "$opt{res}/contigs.orfs.nt.fa";
 	my $orfs_aa			= "$opt{res}/contigs.orfs.aa.fa";
 	my $assembler_out 	= "$opt{res}/assembler_out";
-	
+
 	my $log 		= "$opt{logs}/$opt{sample}/assemble.log";
-	
+
 	# params:
 	my $par_megahit = defined($opt{par_megahit})? $opt{par_megahit} : "";
 	my $par_spades  = defined($opt{par_spades}) ? $opt{par_spades}  : "";
-	
+
 	system("rm -f $log");
-	system("touch $log");	
-	
+	system("touch $log");
+
 	if($opt{'ass'} eq 'megahit'){
 		system_call("rm -fR $assembler_out", $opt{'v'}); # Megahit will complain if that dir exists
 		if( $opt{'se'} ){
@@ -715,18 +720,18 @@ sub pipe_assemble{
 		else{
 		system_call("megahit -t $opt{'numth'} $par_megahit -1 $r1 -2 $r2 --out-dir $assembler_out &>> $log", $opt{'v'});
 		}
-		
+
 		system_call("seqkit seq -n $assembler_out/final.contigs.fa | ".
 					"cut -d' ' --output-delimiter=\$'\\t' -f1,3,4 | ".
 					"sed 's/multi=\\|len=//g' | ".
 					"sed 's/_/./g' | ".
 					"csvtk add-header -tn seqid,coverage,length | ".
 					"csvtk sort -t -k seqid:N 1> $contigs_info 2>> $log", $opt{'v'});
-		
+
 		system_call("seqkit seq --only-id $assembler_out/final.contigs.fa | ".
 					"seqkit replace -p '_' -r '.' | ".
 					"seqkit sort -Nw0 1> $contigs 2>> $log", $opt{'v'});
-	
+
 	}
 	elsif($opt{'ass'} eq 'spades'){
 		system_call("rm -fR $assembler_out", $opt{'v'});
@@ -736,69 +741,69 @@ sub pipe_assemble{
 		else{
 		system_call("spades.py -t $opt{'numth'} $par_spades -1 $r1 -2 $r2 -o $assembler_out &>> $log", $opt{'v'});
 		}
-		
+
 		system_call("seqkit seq -n $assembler_out/scaffolds.fasta | ".
 					"sed 's/length_\\|cov_//gi' | ".
 					"sed 's/NODE_/scaffold./' | ".
 					"cut -d'_' --output-delimiter=\$'\\t' -f1,2,3 | ".
 					"csvtk add-header -tn seqid,length,coverage | ".
 					"csvtk sort -t -k seqid:N 1> $contigs_info 2>> $log", $opt{'v'});
-		
+
 		system_call("seqkit replace -p '^[A-Za-z]+_([0-9]+).*' -r 'scaffold.\$1' $assembler_out/scaffolds.fasta | ".
 					"seqkit sort -Nw0 1> $contigs 2>> $log", $opt{'v'});
 	}
 	else{
 		die "ERROR: invalid --ass $opt{'ass'}";
 	}
-	
+
 	if( defined($opt{'min_contig_length'})){
 		system_call("cat $contigs | seqkit seq -w90 -m $opt{'min_contig_length'} 1> $contigs.tmp", $opt{'v'});
 		system_call("mv $contigs.tmp $contigs", $opt{'v'});
 	}
-	
+
 	if( $opt{'clean'} ){
 		system_call("rm -fr $assembler_out", $opt{'v'});
 	}
-	
+
 	if( nlines($contigs)<2){
 		print STDERR "\tWARNING: $subid: exporting empty assembly\n\n";
 		return;
 	}
-	
-	detect_orfs(seqs=>$contigs, orfs_nt=>$orfs_nt, orfs_aa=>$orfs_aa, 
+
+	detect_orfs(seqs=>$contigs, orfs_nt=>$orfs_nt, orfs_aa=>$orfs_aa,
 				orf_finder=>$opt{gen}, min_orf_length=>$opt{min_orf_length});
 }
 
 sub realign_reads_contigs{
 	print STDERR "\n# REALIGN READS TO CONTIGS\n\n";
 	my $subid	= "realign_reads_contigs()";
-	
+
 	# in:
 	my %opt 		= %{shift()};
 	my $r1 		= (-e "$opt{res}/reads/read1.trim.hflt.fq.gz") ? "$opt{res}/reads/read1.trim.hflt.fq.gz" : "$opt{res}/reads/read1.trim.fq.gz";
-	my $r2		= (-e "$opt{res}/reads/read2.trim.hflt.fq.gz") ? "$opt{res}/reads/read2.trim.hflt.fq.gz" : "$opt{res}/reads/read2.trim.fq.gz";	
+	my $r2		= (-e "$opt{res}/reads/read2.trim.hflt.fq.gz") ? "$opt{res}/reads/read2.trim.hflt.fq.gz" : "$opt{res}/reads/read2.trim.fq.gz";
 	my $contigs = "$opt{'res'}/contigs.fa";
 
 	# tmp:
 	my $sam 		= "$opt{res}/contigs.bwa.sam";
 	my $bam 		= "$opt{res}/contigs.top.bam";
-	
+
 	# out:
 	my $idxstats= "$opt{res}/contigs.idxstats";
 	my $idmap   = "$opt{res}/readid_contigid.tsv";
 	my $log 		= "$opt{logs}/$opt{sample}/realign_reads.log";
-	
+
 	# check input
 	die "ERROR: $subid: missing forward reads\n" if(!(-e $r1));
-	die "ERROR: $subid: missing forward reads\n" if(!(-e $r2));
+	die "ERROR: $subid: missing reverse reads\n" if(!(-e $r2) && !$opt{se});
 	die "ERROR: $subid: missing contigs\n" if(!(-e $contigs));
 	if(nlines($contigs)<2){
 		print STDERR "\tWARNING: $subid: empty contigs file: exporting empty idxstats/idmap files\n\n";
 		system("touch $idxstats $idmap");
 		return;
 	}
-	
-	
+
+
 	system("rm -f $log; touch $log");
 	system_call("bwa index $contigs &>> $log");
 	if( $opt{se} ){
@@ -807,7 +812,7 @@ sub realign_reads_contigs{
 	else{
 		system_call("bwa mem -t $opt{numth} $contigs $r1 $r2 1> $sam 2>> $log");
 	}
-	
+
 	system_call("samtools view -@ $opt{numth} -h -e '!flag.unmap && mapq>=$opt{min_read2contig_mapq} && [AS]>=$opt{min_read2contig_score}' $sam 1> $sam.tmp 2>> $log");
 	system_call("mv $sam.tmp $sam");
 	system_call("samtools sort -@ $opt{numth} -n -T $opt{tmpdir} $sam | ".					# sort by read name
@@ -818,7 +823,7 @@ sub realign_reads_contigs{
 	system_call("samtools index -@ $opt{numth} $bam 2>> $log");
 	system_call("samtools idxstats $bam 1> $idxstats 2>> $log");
 	system_call("samtools view  $bam | cut -f1,3 1> $idmap 2>> $log");
-	
+
 	if($opt{clean}){
 		system_call("rm -f $sam $bam $contigs.amb $contigs.ann $contigs.bwt $contigs.pac $contigs.sa");
 	}
@@ -831,7 +836,7 @@ sub realign_reads_contigs{
 sub generate_reports{
 	print STDERR "\n# GENERATE REPORTS\n\n";
 	my $subid					= "generate_reports()";
-	
+
 	# in:
 	my %opt						= %{ shift() };
 	my $annot					= (-e "$opt{res}/annot2.tsv" && nlines("$opt{res}/annot2.tsv")>1) ? "$opt{res}/annot2.tsv" : "$opt{res}/annot1.tsv";
@@ -843,7 +848,7 @@ sub generate_reports{
 	# $VIRUS_FAMILY_HOST
 	# $VIRUS_GENUS_HOST
 	# $VIRUS_FAMILY_GENCOMP
-	
+
 	# tmp:
 	my $annot_lca				= "$annot.lca.tmp";
 	my $annot_nucl				= "$annot.nucl.tmp";
@@ -852,19 +857,19 @@ sub generate_reports{
 	my $annot_union				= "$annot.union.tmp";
 	my $bphage_map				= "$annot.bphage.tmp";
 	my $readn_taxid 				= "$opt{res}/readn_taxid.tmp";
-	
+
 	# out:
-	
+
 	my $annot_table				= "$opt{res}/annot_table.tsv";
 	my $annot_excel 				= "$opt{res}/annot_table.xlsx";
 	my $abund_table 				= "$opt{res}/abund_table.tsv";
-	my $abund_excel 				= "$opt{res}/abund_table.xlsx";		
+	my $abund_excel 				= "$opt{res}/abund_table.xlsx";
 	my $taxprofile				= "$opt{res}/taxprofile.txt";
 	my $krona_data				= "$opt{res}/reports/krona.data.txt";
 	my $krona_graph 				= "$opt{res}/reports/krona.report.html";
 	my $contigs_dir 				= "$opt{res}/contigs";
 	my $log 						= "$opt{logs}/$opt{sample}/generate_reports.log";
-	
+
 	# params:
 	my $threads 					= ($opt{numth} < 8) ? $opt{numth} : 8; # min(8,numth)
 	my $par_abund_table 			= "-h -w $opt{wmodel} --conttail $opt{tail_contig}";
@@ -879,17 +884,17 @@ sub generate_reports{
 	my $taxranks					= "species,genus,family,$toptaxrank";
 	my $taxgroups				= $opt{taxgroups} || "all";
 
-	
-	
+
+
 	if( $opt{'hgtaxid'} && (-e $r1_flt && -e $r1_hgflt ) ){
 		my $flt 					= (`$opt{'gzip'} -d -c  $r1_flt  | wc -l`)/4;
 		my $hgflt				= (`$opt{'gzip'} -d -c  $r1_hgflt | wc -l`)/4;
 		my $hg_readn 			= $flt - $hgflt;
-		
+
 		$par_abund_table			= "$par_abund_table --hgabund $hg_readn --hgtaxid $opt{hgtaxid}";
 		$par_taxprofile 			= "$par_taxprofile --hgtaxid $opt{hgtaxid}";
 	}
-	
+
 	system("rm -f $log");
 	system("touch $log");
 
@@ -897,13 +902,13 @@ sub generate_reports{
 	if( $opt{taxonomy}->{update} ){
 		update_taxonomy(\%opt);
 	}
-	
+
 	# INPUT CHECKS
 	if( !(-e $annot) || nlines($annot) < 2){
 		print STDERR "\tWARNING: $subid: No reporting due to missing/empty annotation file: $annot\n";
 		return();
 	}
-	
+
 	# CONVERT POSSIBLE LISTS OF STAXIDS TO LCA
 	my $taxids_col 	= colind($annot,'staxid');
 	system_call("head -n1 $annot | csvtk rename -tf staxid -n staxids | tr '\\n' '\\t' 1> $annot_lca");
@@ -911,9 +916,9 @@ sub generate_reports{
 	system_call("csvtk filter2 -tj $opt{numth} -f '\$staxid!=\"\"' $annot | ".
 				"csvtk del-header -t | ".
 				"taxonkit lca --data-dir $opt{taxonomy}->{db} -j $opt{numth} -i $taxids_col -s \";\" 1>> $annot_lca 2>> $log");
-	
-	
-	
+
+
+
 	# GENERATE CONTIG ANNOTATION TABLES
 		# select nucl-annotations and select top score for each uniq contig+staxid
 	system_call("cat $annot_lca | ".
@@ -924,7 +929,7 @@ sub generate_reports{
 				"csvtk uniq -tj $opt{numth} -f qseqid,staxid 1> $annot_nucl.tmp  2>> $log" );
 	system_call("mv $annot_nucl.tmp $annot_nucl" );
 	}
-		
+
 		# select prot-annotations and select top score for each uniq contig+orf+staxid
 	system_call("cat $annot_lca | ".
 				"csvtk filter2 -tj $opt{numth} -f '\$dbtype==\"prot\" && \$qcov>=$min_qcov_annot' 1> $annot_prot 2>> $log" );
@@ -935,11 +940,11 @@ sub generate_reports{
 				"csvtk uniq -tj $opt{numth} -f qseqid,orf,staxid 1> $annot_prot.tmp  2>> $log" );
 	system_call("mv $annot_prot.tmp $annot_prot" );
 	}
-	
+
 		# select hmm-annotations, if any, keep all hits
 	system_call("cat $annot_lca | ".
 				"csvtk filter2 -tj $opt{numth} -f '\$dbtype==\"HMM\" ' 1> $annot_hmm 2>> $log" );
-	
+
 		# join nucl, prot and hmm-annotations, sort and print to annot_table
 		# rename fields for final table: 'qseqid' > 'contig', 'qseqlen' > 'clen'
 	system_call("cat $annot_nucl <(tail -n+2 $annot_prot) <(tail -n+2 $annot_hmm) 1> $annot_table  2>> $log" );
@@ -953,7 +958,7 @@ sub generate_reports{
 	if(nlines($annot_table) < 2){
 		print STDERR "\n\tWARNING: $subid: No reporting due to empty annotation table: $annot_table\n\n";
 		return();
-	}	
+	}
 		# add taxonomy
 	my $taxid_col = colind($annot_table,'staxid');
 	system("head -n1 $annot_table | tr '\\n' '\\t' 1> $annot_table.tmp");
@@ -966,14 +971,14 @@ sub generate_reports{
 	}
 	system("mv $annot_table.tmp $annot_table");
 		# add division-field, in case this has not been added during annotation
-	add_division_field(	annot=>$annot_table, 
+	add_division_field(	annot=>$annot_table,
 						taxonomy=>$opt{taxonomy}->{db}, numth=>$opt{numth}, overwrite=>1);
 		# ADD bphage-field, redundant if bphage-field already added to $annot, but run this in case it has not
 	add_bphage_field(	annot=>$annot_table,
 						phfilter=>$BPHAGE_FILTER,
 						taxonomy=>$opt{taxonomy}->{db},
 						log=>$log,numth=>$opt{numth},overwrite=>1);
-						
+
 		# ADD host.source
 	my $FIELD_HOST	= "host.source";
 	system_call("csvtk join -tj $opt{numth} -f 'genus;genus' -L --na 'NA' $annot_table $VIRUS_GENUS_HOST | ".
@@ -991,11 +996,11 @@ sub generate_reports{
 
 		# convert $annot_table to excel file
 	system_call("$opt{call_R} $R_scripts/print_annot_table.R  $annot_table $annot_excel $toptaxrank $taxgroups 2>> $log");
-	
+
 		# SORT CONTIGS TO DIRS USING TAXONOMY CLASSIFICATION
-	system_call("perl $perl_scripts/sort_contigs_bytaxa_v3.pl -c $contigs -a $annot_table --res $opt{res}/contigs --toptaxrank $toptaxrank -v &>> $log");	
-	
-	
+	system_call("perl $perl_scripts/sort_contigs_bytaxa_v3.pl -c $contigs -a $annot_table --res $opt{res}/contigs --toptaxrank $toptaxrank -v &>> $log");
+
+
 	# GENERATE ABUNDANCE TABLES
 	if( !(-e $contigs_stats)){
 		print STDERR "\n\tWARNING: Unable to estimate abundancies: no $contigs_stats file\n";
@@ -1024,11 +1029,11 @@ sub generate_reports{
 	system_call("mv $annot_union.tmp $annot_union");
 	filter_tophits(dbhits=>$annot_union,dbhits_flt=>"$annot_union.tmp", qcol=>'qseqid', bitscol=>'bitscore', retain_ties=>1);
 	system_call("mv $annot_union.tmp $annot_union");
-	
+
 		# rename 'qseqid' to 'contig' for final annotation-table
 	system_call("csvtk rename -tf qseqid,qseqlen -n contig,contig.len $annot_union 1> $annot_union.tmp 2>> $log");
 	system("mv $annot_union.tmp $annot_union");
-	
+
 	if( nlines($annot_union)<2 ){
 		print STDERR "\n\tWARNING: $subid: Unable to estimate abundancies: no annotations passign threshold\n";
 		system("rm -f $annot_nucl $annot_prot $annot_union $bphage_map $readn_taxid");
@@ -1037,28 +1042,28 @@ sub generate_reports{
 
 		# estimate abundancies:
 	system_call("perl $perl_scripts/get_abund_table.pl $par_abund_table $annot_union $contigs_stats 1> $readn_taxid 2> $log" );
-	
+
 	if( nlines($readn_taxid)<2 ){
 		print STDERR "\n\tWARNING: $subid: printing empty abundance table\n";
 		system_call("touch $abund_table");
 		system("rm -f $annot_nucl $annot_prot $annot_union $bphage_map $readn_taxid");
 		return();
-	}	
-	
+	}
+
 		# add taxonomy to abundancies and print to $abund_table:
 	system_call("csvtk filter2 -t -f '\$taxid!=\"\"' $readn_taxid | ".
 				"csvtk del-header -t  | ".
 			  	"taxonkit reformat --data-dir $opt{taxonomy}->{db} -j $threads -I 4 -t -f '{s}\\t{g}\\t{f}\\t{o}\\t{c}\\t{p}\\t{k}' -r NA -R NA | ".
 			  "csvtk add-header -I -t -n readn,contign,assembly.size,taxid,species,genus,family,order,class,phylum,superkingdom,species_id,genus_id,family_id,order_id,class_id,phylum_id,superkingdom_id 1> $abund_table 2>> $log");
 		# add division-field
-	add_division_field(	annot=>$abund_table, 
+	add_division_field(	annot=>$abund_table,
 						taxonomy=>$opt{taxonomy}->{db}, numth=>$opt{numth}, overwrite=>1);
 		# ADD bphage-field
 	add_bphage_field(	annot=>$abund_table,
 						phfilter=>$BPHAGE_FILTER,
 						taxonomy=>$opt{taxonomy}->{db},
 						log=>$log,numth=>$opt{numth},overwrite=>1);
-				
+
 		# ADD host.source
 	system_call("csvtk join -tj $opt{numth} -f 'genus;genus' -L --na 'NA' $abund_table $VIRUS_GENUS_HOST | ".
 				"csvtk rename -tf $FIELD_HOST -n gen_host 1> $abund_table.tmp1 2>> $log");
@@ -1071,18 +1076,22 @@ sub generate_reports{
 		# ADD genome.composition
 	system_call("csvtk join -tj $opt{numth} -f 'family;family' -L --na 'NA' $abund_table $VIRUS_FAMILY_GENCOMP 1> $abund_table.tmp 2>> $log");
 	system_call("mv $abund_table.tmp $abund_table");
-	
+
 		# convert $abund_table to excel file:
 	system_call("$opt{'call_R'} $R_scripts/print_abund_table.R ".
 				"$abund_table $abund_excel $taxranks $taxgroups $opt{tail} 2>> $log");
 
-	# CREATE KRONA GRAPH	
+	# CREATE KRONA GRAPH
 	system_call("perl $perl_scripts/abundtable2krona.pl $par_kronagraph $abund_table  --toptaxrank $toptaxrank 1> $krona_data 2>> $log");
 	system_call("ktImportText $krona_data -o $krona_graph -u \"http://krona.sourceforge.net\" 2>> $log");
 
 	# TAXONOMIC PROFILE
-	#system_call("perl $perl_scripts/abundtable2taxprofile.pl $par_taxprofile $abund_table 1> $taxprofile 2>> $log");
-	
+	# Re-enabled: the script runs clean on the abundance table this step has just
+	# written.  Note the CAMI superkingdom row comes out as NA — viruses no longer
+	# sit under a superkingdom after NCBI's 2025 rank overhaul, which is the same
+	# reason toptaxrank defaults to division; that is the taxonomy, not a fault here.
+	system_call("perl $perl_scripts/abundtable2taxprofile.pl $par_taxprofile $abund_table 1> $taxprofile 2>> $log");
+
 	# REMOVE TMP
 	#system("rm -f $annot_nucl $annot_prot $annot_hmm $annot_union $bphage_map $readn_taxid");
 
@@ -1095,18 +1104,18 @@ sub generate_reports{
 #		annot=>$annot_table,
 #		contigs=>$contigs_vi,
 #		log=>$log_igv,
-#		opt=>\%opt, 
-#		min_clen_sum => 0, 
+#		opt=>\%opt,
+#		min_clen_sum => 0,
 #		min_alen_sum => 0,
 #		max_refgen => 10);
 #
 sub generate_refgen_reports{
 	print STDERR "\n# GENERATE REFGEN REPORTS\n\n";
-	
+
 	# IN:
 	my %opt 					= %{shift()};
 	my $annot_tsv			= "$opt{res}/annot_table.tsv";
-	my $contigs_fa			= (-e "$opt{res}/contigs.ann2.vi.fa")? "$opt{res}/contigs.ann2.vi.fa" : 
+	my $contigs_fa			= (-e "$opt{res}/contigs.ann2.vi.fa")? "$opt{res}/contigs.ann2.vi.fa" :
 								((-e "$opt{res}/contigs.ann1.vi.fa")? "$opt{res}/contigs.ann1.vi.fa" : "$opt{res}/contigs.fa");
 	# out:
 	my $resdir				= "$opt{res}/reports";
@@ -1128,20 +1137,20 @@ sub generate_refgen_reports{
 	my $target				= "Viruses";
 	my $dbtype				= "nucl";
 	my $par_minimap_s		= 10;
-	
+
 	# INPUT CHECKS
 	if( !(-e $annot_tsv)  || nlines($annot_tsv)<2 ){
 		print STDERR "\n\tNo reporting due to missing/empty annotation file: $annot_tsv\n\n";
 		return();
 	}
-	
+
 	system("rm -f $log");
 	system("touch $log");
 	system("rm -fr $resdir/data");
-	
+
 		# Collect vi-annotations
 	system_call("csvtk filter2 -tf '\$dbtype==\"$dbtype\" && \$$toptaxrank==\"$target\" && \$bphage==\"no\"' $annot_tsv 1> $annot_ta_tsv  2>> $log");
-		# parse annotation 
+		# parse annotation
 	my %sp2clen			= read_tsv2kvahash($annot_ta_tsv,"species","clen");
 	my %sp2alen			= read_tsv2kvahash($annot_ta_tsv,"species","alen");
 	my %sp2contig		= read_tsv2kuvahash($annot_ta_tsv,"species","contig");
@@ -1149,7 +1158,7 @@ sub generate_refgen_reports{
 	#my %sp2staxid 		= read_tsv2kuvahash($annot_ta_tsv,"species","staxid");
 	my %sp2genus			= read_tsv2hash($annot_ta_tsv,"species","genus");
 	#my %sp2family		= read_tsv2hash($annot_ta_tsv,"species","family");
-	
+
 		# Filter target species list
 	my %splist			= ();
 	foreach my $sp(keys %sp2clen){
@@ -1173,13 +1182,13 @@ sub generate_refgen_reports{
 		}
 		$sp2refgenid{$sp} = \@seqids2;
 	}
-	
+
 	my %contigs 			= %{readfasta($contigs_fa)};
 	my @summary_table	= ();
-	
+
 	# Create refgen/igv reports
 	foreach my $sp( sort { $sp2genus{$a} cmp $sp2genus{$b} } keys %splist){
-		
+
 		# Collect target-contigs to fasta
 		my @ids		= @{$sp2contig{$sp}};
 		open(OUT,">$contigs_ta_fa") or die "Can\'t open $contigs_ta_fa: $!\n";
@@ -1192,7 +1201,7 @@ sub generate_refgen_reports{
 			print OUT "$contigs{$seqid}\n";
 		}
 		close(OUT);
-		
+
 		# retrieve genome+annotation data for refgens
 		my @refgenids 	= @{$sp2refgenid{$sp}};
 		write_array2file($refgens_txt,\@refgenids);
@@ -1204,21 +1213,21 @@ sub generate_refgen_reports{
 		if(system($call)!= 0){
 			print STDERR "\tWARNING: failed to download annotation for $sp: skipping\n";
 			next;
-		}				
+		}
 		system_call("unzip -q -o -d $opt{tmpdir} $dataset_zip 2>> $log");
 			# parse metadata
 		system_call("dataformat tsv virus-genome --force --package $dataset_zip --fields accession,host-name,geo-location,isolate-lineage 1> $refgen_metainfo 2>> $log");
 		my %refgen_minfo = read_tsv2hashtable($refgen_metainfo,"Accession");
-		
+
 			# parse gene annotation data to bed file
 		system_call("dataformat tsv virus-annotation --force --package $dataset_zip --fields accession,gene-name,gene-genomic-range-start,gene-genomic-range-stop,gene-cds-nuc-fasta-range-start,gene-cds-nuc-fasta-range-stop --elide-header 1>> $refgen_annot 2>> $log");
-		
+
 		my $headers_tmp	= "#accession\tchromStart\tchromEnd\tname\tscore\tstrand\tthickStart\tthickEnd\titemRgb";
 		my $spdir 		= $sp; $spdir =~ s/\s+/_/g;
 		my $bed			= "$resdir/data/$spdir/refgen.all.bed";
 		my @colors		= ('#A202FF','#2072B2','#1260CC','#OOABFF','#00E8FF');	# iterate blue palet
 		system("mkdir -p $resdir/data/$spdir");
-		
+
 		open(OUT,">$bed") or die "Can\'t open $bed: $!\n";
 		print OUT "$headers_tmp\n";
 		open(IN, "<$refgen_annot") or die "Can\'t open $refgen_annot: $!\n";
@@ -1233,32 +1242,32 @@ sub generate_refgen_reports{
 			$ind++;
 		}
 		close(IN);close(OUT);
-		
-				
+
+
 		# run minimap > bam > bam.bai
 		my $sam 			= "$resdir/data/$spdir/refgen.all.sam";
 		my $bam 			= "$resdir/data/$spdir/refgen.all.bam";
 		my $coverage_tsv	= "$resdir/data/$spdir/refgen.all.coverage.tsv";
-		
+
 		system_call("minimap2 -t $opt{numth} --cs -s $par_minimap_s -a $dataset_genomic_fa $contigs_ta_fa 1> $sam 2>> $log");
 		system_call("samtools sort -@ $opt{numth} -o $bam $sam  2>> $log");
 		system_call("samtools index $bam 2>> $log");
 		system_call("samtools coverage --f 0 $bam 1> $coverage_tsv  2>> $log");
 		my %coverage		= read_tsv2hashtable("$coverage_tsv","#rname");
-		
+
 		# create the IGV html
 		generate_igv_html(
-			opt=> \%opt, 
-			species=>$sp, 
-			refgens=>$dataset_genomic_fa, 
+			opt=> \%opt,
+			species=>$sp,
+			refgens=>$dataset_genomic_fa,
 			refgens_metainfo=> \%refgen_minfo,
 		 	contigs=>$contigs_ta_fa,
 		 	bam=>$bam,
 		 	bed=>$bed,
-		 	resdir=>"$resdir/data/$spdir", 
+		 	resdir=>"$resdir/data/$spdir",
 		 	split_byrefgen=>1,
 		 	use_data_uri=>1, log=>$log);
-		
+
 		# Filling @summary_table
 		# @headers	= ("Genus","Species","clen.sum","alen.sum","Refgen.len","Refgen.cov","Refgen.igv");
 		my $genus		= $sp2genus{$sp};
@@ -1277,21 +1286,21 @@ sub generate_refgen_reports{
 			push(@summary_table,\@summary_row);
 		}
 	}
-	
+
 	# sort @summary_table: by $refgen_cov > by $species
-	@summary_table	= 
+	@summary_table	=
 		sort { ($a->[5] eq "NA" && $b->[5] eq "NA")? 0:
 				($a->[5] eq "NA") ? +1 :
 				($b->[5] eq "NA") ? -1 :
 				($b->[5] <=> $a->[5]) } @summary_table;
-	@summary_table	= sort{ $a->[1] cmp $b->[1]} @summary_table; 
+	@summary_table	= sort{ $a->[1] cmp $b->[1]} @summary_table;
 	my @headers		= ("Genus ","Species","clen.sum","alen.sum","Refgen.len","Refgen.cov","Refgen.igv");
 	unshift(@summary_table, \@headers);
-	
+
 	# create refgen-report-html
 	open(OUT,">$report_html") or die "ERROR: failed to open: $report_html\n";
-	
-	if( !$opt{webmode} ){	
+
+	if( !$opt{webmode} ){
 		print OUT "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n";
 		print OUT "<html>\n";
 		print OUT "<head>\n";
@@ -1309,7 +1318,7 @@ sub generate_refgen_reports{
 
 	print OUT "<h3> Lazypipe RefGen Report</h3>\n";
 	print OUT "<p>Sample: $opt{sample}</p>\n";
-	
+
 	# column attributes, printed to hd-tag
 	my $table_attrs = "class='sortable'";
 	my @th_attrs	= ();
@@ -1320,14 +1329,14 @@ sub generate_refgen_reports{
 	push(@th_attrs, "class='mixed' type='int'");		# refgen.len: int
 	push(@th_attrs, "class='desc' type='num'");		# refgen.cov: num
 	push(@th_attrs, "class='mixed' type='element'");	# refgen.igv: <a>-element
-	
+
 	write_table_html(table=>\@summary_table, table_attrs=>$table_attrs, th_attrs=>\@th_attrs, fh=>\*OUT);
-	
+
 	print OUT
 	"<script>\n".
 	"	init_sortable_tables();\n".
 	"</script>\n";
-	
+
 	if( !$opt{webmode} ){
 		print OUT "</body>\n";
 		print OUT "</html>\n";
@@ -1337,9 +1346,9 @@ sub generate_refgen_reports{
 
 sub pipe_annotation_ictv{
 	my $subid			= "pipe_annotation_ictv()";
-	
+
 	print STDERR "# STARTING $subid\n" if ($VERBAL);
-	
+
 	# IN
 	my %opt 				= %{shift()};
 	my $contigs_ta		= undef;
@@ -1351,15 +1360,15 @@ sub pipe_annotation_ictv{
 	}
 	my $contigs_info		= "$opt{res}/contigs.fa.info.tsv";
 		die "ERROR: $subid: missing file: $contigs_info" if(!(-e $contigs_info));
-	my $ictv_blastn_db	= $opt{'ann.databases'}->{"blastn.ictv"}->{db} || 
+	my $ictv_blastn_db	= $opt{'ann.databases'}->{"blastn.ictv"}->{db} ||
 		die "ERROR: $subid: no ICTV BLASTP database. Expecting: ann.databases:blastn.ictv: blastdb\n";
-	my $ictv_blastp_db	= $opt{'ann.databases'}->{"blastp.ictv"}->{db} || 
+	my $ictv_blastp_db	= $opt{'ann.databases'}->{"blastp.ictv"}->{db} ||
 		die "ERROR: $subid: no ICTV BLASTP database. Expecting: ann.databases:blastp.ictv: blastdb\n";
-	my $ictv_tsv			= $opt{'ICTV.VMR'}->{db} || 
+	my $ictv_tsv			= $opt{'ICTV.VMR'}->{db} ||
 		die "ERROR: $subid: no ICTV VMR table. Expecting: ICTV.VMR: db: ICTV.VMR.tsv";
 	my $contigs_idxstats	= "$opt{res}/contigs.idxstats";
 		die "ERROR: $subid: missing file: $contigs_idxstats" if(!(-e $contigs_idxstats));
-	
+
 	# OUT
 	my $dbhits_blastn		= "$opt{res}/ictv/ictv.dbhits.blastn.tsv";
 	my $dbhits_blastp		= "$opt{res}/ictv/ictv.dbhits.blastp.tsv";
@@ -1372,11 +1381,11 @@ sub pipe_annotation_ictv{
 	my $annot_table			= "$opt{res}/ictv/ictv.annot_table.tsv";
 	my $annot_excel 			= "$opt{res}/ictv/ictv.annot_table.xlsx";
 	my $abund_table 			= "$opt{res}/ictv/ictv.abund_table.tsv";
-	my $abund_excel 			= "$opt{res}/ictv/ictv.abund_table.xlsx";		
+	my $abund_excel 			= "$opt{res}/ictv/ictv.abund_table.xlsx";
 	#my $krona_data			= "$opt{res}/reports/ictv.krona.data.txt";
 	#my $krona_graph			= "$opt{res}/reports/ictv.krona.graph.html";
 	my $log					= "$opt{logs}/$opt{sample}/ictv.annot.log";
-	
+
 	# TMP
 	my $contig_taxid_bits	= "$opt{tmpdir}/ictv.contig_taxid_bits.tsv";
 	my $readn_taxid 			= "$opt{tmpdir}/ictv.readn_taxid.tsv";
@@ -1384,7 +1393,7 @@ sub pipe_annotation_ictv{
 	my $contigs_ta_un_info	= "$opt{tmpdir}/ictv.contigs.un.info.tsv";
 	my $annot_taxonomy		= "$opt{tmpdir}/ictv.annot+taxonomy.tsv";
 	my $ictv_tmp				= "$opt{tmpdir}/ictv_vmr_selected.tsv";
-	
+
 	# PARAMS
 	my $staxid			= "staxid";
 	my $staxid_genus		= "";
@@ -1397,13 +1406,13 @@ sub pipe_annotation_ictv{
 	my $sp_prob_cutoff	= 0;
 	my $ge_prob_cutoff	= 0.001;
 	my $par_abund_table 	= "-h -w $opt{wmodel} --conttail $opt{tail_contig}";
-	
+
 	# WORK
 	system("rm -f $log; touch $log");
 	#system("rm -fr $opt{res}/ictv/");
 	system("mkdir -p $opt{res}/ictv");
-	
-	
+
+
 	# run BLASTN x ICTV isolates
 	annotate_blastn(seqs				=> $contigs_ta,
 					db				=> $ictv_blastn_db,
@@ -1424,7 +1433,7 @@ sub pipe_annotation_ictv{
 					dbhits			=>$dbhits_blastp,
 					annot			=>$annot,
 					append			=>1,
-					log				=>$log, 
+					log				=>$log,
 					numth			=>$opt{numth},
 					min_bits			=>$opt{min_blastp_bits},
 					orf_finder		=>$opt{gen},
@@ -1436,7 +1445,7 @@ sub pipe_annotation_ictv{
 	else{
 		print STDERR "\t$subid: all contigs annotated with BLASTN\n" if ($VERBAL);
 	}
-	
+
 	# PARSE ICTV TABLE
 	system_call("cat $ictv_tsv | ".
 			"csvtk cut -tf 'Isolate ID',Species,Genus,Family,Order,Genome,'Host source' | ".
@@ -1444,14 +1453,14 @@ sub pipe_annotation_ictv{
 			"csvtk mutate -tf 'Isolate ID' -n 'Isolate.NID' -p '^VMR([0-9]+)' 1> $ictv_tmp 2>> $log");
 	my %ictv_isolatenid2sp= read_tsv2hash($ictv_tmp,"Isolate.NID","Species");
 	my %ictv_isolatenid2ge= read_tsv2hash($ictv_tmp,"Isolate.NID","Genus");
-		
-	
+
+
 	# RUN EM
 		# estimate P(q) from contigs.idxstats + annot-table
 	my %contids_vi			= read_tsv2hash($annot,"qseqid","qseqid"); # used for list of viral qseqids
 	my $q_num				= scalar(keys %contids_vi)+0.0;
 	my %q_prob				= map{ $_ => 1.0 / $q_num } keys %contids_vi;# by default just use P(q) = 1/|Q|
-	if($estimate_q_prob){		
+	if($estimate_q_prob){
 		my %contid2readn		= read_tsv2hash_noheaders($contigs_idxstats,0,2);
 		my $readn_sum_vi		= 0.0;
 		map { $readn_sum_vi += $contid2readn{$_}} keys %contids_vi;
@@ -1461,7 +1470,7 @@ sub pipe_annotation_ictv{
 	my $logL		= $res->{logL};
 	my %F		= %{$res->{F}};
 	my %Fiter	= %{$res->{Fiter}};
-	
+
 	# print F-abundancies (Isolates)
 	my @taxids	= sort{ $F{$b} <=> $F{$a} } keys %F;
 	my %prob_ge = ();
@@ -1471,7 +1480,7 @@ sub pipe_annotation_ictv{
 		$prob_ge{$ge} 	= 0 if(!defined($prob_ge{$ge}));
 		$prob_ge{$ge}	+= $F{$id};
 	}
-	
+
 	open(OUT,">$taxid_prob") or die "Can\'t open $taxid_prob: $!\n";
 	print OUT "Isolate.NID\tSpecies\tGenus\tprob\tprob.genus\n";
 	foreach my $id(@taxids){
@@ -1492,14 +1501,14 @@ sub pipe_annotation_ictv{
 		printf OUT "$t\t$sp\t%s\n",join("\t",@Fiter_t);
 	}
 	close(OUT);
-	
+
 
 	# GENERATE CONTIG ANNOTATION TABLES
 
 	if( nlines($annot) < 2){
 		print STDERR "\n\tWARNING: $subid: No reporting due to empty annotation file: $annot\n\n";
 		return();
-	}	
+	}
 	# start with all annotations, delete division and bphage fields (these are NA from blast)
 	system_call("csvtk sort -tj $numth -k qseqlen:rN -k qseqid:N -k staxid:N  $annot | ".
 				"csvtk rename -tf staxid -n Isolate.NID 1> $annot_table 2>> $log");
@@ -1516,7 +1525,7 @@ sub pipe_annotation_ictv{
 	# filter by P-values
 	system_call("csvtk filter -tf \"Genus.prob>=$ge_prob_cutoff\" $annot_table 1> $annot_table.tmp 2>> $log");
 	system("mv $annot_table.tmp $annot_table");
-	
+
 	# add taxonomy + Genome + Host source from ICTV VMR table
 	system_call("csvtk join -tj $numth -f 'Isolate.NID' -L --na 'NA' $annot_table $ictv_tmp 1> $annot_table.tmp 2>> $log");
 	system("mv $annot_table.tmp $annot_table");
@@ -1528,16 +1537,16 @@ sub pipe_annotation_ictv{
 	# add bphage-field
 	system_call("csvtk mutate2 -tj $numth -n bphage -e '\$Host_source==\"archaea\" || \$Host_source==\"bacteria\" ? \"yes\":\"no\"' $annot_table 1> $annot_table.tmp 2>> $log");
 	system("mv $annot_table.tmp $annot_table");
-	
+
 
 	# convert $annot_table to excel file: does not work: TODO printing to excel
 	#system_call("$opt{call_R} $R_scripts/print_annot_table.R  $annot_table $annot_excel domain Viruses 2>> $log");
 	system_call("$perl_scripts/write_excel.pl $annot_table 1> $annot_excel 2>> $log");
-	
+
 		# SORT CONTIGS TO DIRS USING ICTV CLASSIFICATION
 	#system_call("perl $perl_scripts/sort_contigs_bytaxa_v3.pl -c $contigs -a $annot_table --res $opt{res}/contigs --toptaxrank $toptaxrank -v &>> $log");
-	
-	
+
+
 	#
 	# CREATE ABUNDANCE TABLE
 	# select top-scoring annotation for each contig (retain ties)
@@ -1545,10 +1554,10 @@ sub pipe_annotation_ictv{
 				"csvtk cut -tf qseqid,staxid,bitscore | ".
 				"csvtk rename -tf qseqid -n contig | ".
 				"csvtk sort -tj $opt{numth} -k contig:N -k bitscore:nr 1> $contig_taxid_bits 2>> $log" );
-				
+
 	filter_tophits(dbhits=>$contig_taxid_bits,dbhits_flt=>"$contig_taxid_bits.tmp", qcol=>'contig', bitscol=>'bitscore', retain_ties=>1);
 	system_call("mv $contig_taxid_bits.tmp $contig_taxid_bits");
-	
+
 	if( nlines($contig_taxid_bits)<2 ){
 		print STDERR "\n\tWARNING: $subid: Unable to estimate abundancies: no annotations passign threshold\n";
 		return();
@@ -1556,12 +1565,12 @@ sub pipe_annotation_ictv{
 		# estimate abundancies:
 	system_call("perl $perl_scripts/get_abund_table.pl $par_abund_table $contig_taxid_bits $contigs_idxstats 1> $readn_taxid 2> $log" );
 	#system("rm $contig_taxid_bits");
-	
+
 	if( nlines($readn_taxid)<2 ){
 		print STDERR "\n\tWARNING: $subid: printing empty abundance table\n";
 		system_call("touch $abund_table");
 		return();
-	}	
+	}
 		# add P_taxid
 	system("csvtk cut -tf Isolate.NID,prob,prob.genus $taxid_prob 1> $taxid_prob.tmp 2>> $log");
 	system_call("csvtk join -tj $numth -f 'taxid;Isolate.NID' -L --na 'NA' $readn_taxid $taxid_prob.tmp  | ".
@@ -1570,12 +1579,12 @@ sub pipe_annotation_ictv{
 		# filter by P-values
 	system_call("csvtk filter -tf \"Genus.prob>=$ge_prob_cutoff\" $abund_table 1> $abund_table.tmp 2>> $log");
 	system("mv $abund_table.tmp $abund_table");
-		
+
 		# add taxonomy to abundancies and print to $abund_table:
 	system_call("csvtk join -tj $numth -f 'taxid;Isolate.NID' -L --na 'NA' $abund_table $ictv_tmp 1> $abund_table.tmp 2>> $log");
 	system("mv $abund_table.tmp $abund_table");
 	system("rm -f $readn_taxid $contig_taxid_bits");
-	
+
 	system_call("$perl_scripts/write_excel.pl $abund_table 1> $abund_excel 2>> $log");
 
 }
@@ -1602,31 +1611,31 @@ sub generate_igv_html{
 	my $bam_all			= $args{bam};
 	my $bed_all			= $args{bed};
 	my $resdir			= $args{resdir};
-	
+
 	# params:
 	my $split_byrefgen	= defined($opt{split_byrefgen}) ? $opt{split_byrefgen} : 0;
 	my $use_data_uri		= defined($args{use_data_uri}) ? $args{use_data_uri}: 0;
 	# out:
 	my $log 				= $args{log};
-	
+
 	if($opt{v}){
 		print STDERR "\t# generate_igv_html($species)\n";
 	}
-	
+
 	if(!(-e $log)){
 		system("touch $log");
 	}
 	if(!(-e $resdir)){
 		system("mkdir -p $resdir");
 	}
-	
+
 	# split_byrefgen:
 	my @refseq_ids 	= get_SQ_SN($bam_all);
-	
+
 	foreach my $id(@refseq_ids){
 		# out:
 		my $bam_file			= "$id.bam";
-		my $refgen_file		= "$id.fasta";		
+		my $refgen_file		= "$id.fasta";
 		my $bam				= "$resdir/$bam_file";
 		my $refgen			= "$resdir/$refgen_file";
 		my $contigs_gzip		= "$contigs.gzip";
@@ -1634,11 +1643,11 @@ sub generate_igv_html{
 		my %refgen_minfo		= %{$refgens_minfo{$id}};
 		my $bed_file			= "$id.bed";
 		my $bed				= "$resdir/$bed_file";
-		
+
 		# tmp:
 		my $sam				= "$resdir/$id.sam.tmp";
-		
-		# get bam+bai for this refseq	
+
+		# get bam+bai for this refseq
 		system_call("samtools view -b $bam_all $id 1> $bam 2>> $log");
 		system_call("samtools index $bam 2>> $log");
 		# get refseq fasta+ fai
@@ -1647,20 +1656,20 @@ sub generate_igv_html{
 		# get bed file for this refseq
 		system_call("head -n1 $bed_all 1> $bed 2>> $log");
 		system_call("grep $id $bed_all 1>> $bed 2>> $log || [[ \$? == 1 ]]");	# ignore no match with $? == 1 check
-		
+
 		# create gzip/binary files for data_uri-conversion
 		system_call("gzip -fc $refgen 1> $refgen.gzip 2>> $log");
 		system_call("gzip -fc $refgen.fai 1> $refgen.fai.gzip 2>> $log");
 		system_call("gzip -fc $contigs 1> $contigs.gzip 2>> $log");
 		system_call("gzip -fc $bed 1> $bed.gzip 2>> $log");
-		
+
 		# create @summary_table for contigs
 		my @summary_table	= ();
 		my @headers	= ("contig.id","contig.len","contig.cov","ali.start","strand");
 		push(@summary_table,\@headers);
 		# parsing info on contigs/contig-aligments from sam files
 			# read sam file: ignore everything after CIGAR-col
-		my $sam_headers	= "qname\tflag\trname\tpos\tmapq\tcigar";	
+		my $sam_headers	= "qname\tflag\trname\tpos\tmapq\tcigar";
 		system("echo \"$sam_headers\" 1> $sam");
 		system_call("samtools view $bam 1>> $sam 2>> $log");
 		my %stats 	= read_tsv2hashtable($sam, 'qname');
@@ -1680,7 +1689,7 @@ sub generate_igv_html{
 		push(@th_attrs, "class='mixed' type='num'");
 		push(@th_attrs, "class='asc' type='int'");
 		push(@th_attrs, "class='mixed' type='string'");
-		
+
 		# create IGV-html
 		open(OUT,">$igv_report") or die "ERROR: failed to open: $igv_report\n";
 		print OUT "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n";
@@ -1696,7 +1705,7 @@ sub generate_igv_html{
 		print OUT "<script src=\"https://cdn.jsdelivr.net/npm/igv\@2.13.11/dist/igv.min.js\"></script>\n";
 		print OUT "<meta charset=\"utf-8\"/>\n";
 		print OUT "</head>\n";
-		
+
 		print OUT "<body>\n";
 		print OUT "<h3> Lazypipe RefGen Report</h3>\n";
 		print OUT "<p>\n";
@@ -1710,7 +1719,7 @@ sub generate_igv_html{
 		print OUT "Contigs:\n";
 		write_table_html(table=>\@summary_table, table_attrs=>$table_attrs, th_attrs=>\@th_attrs, fh=>\*OUT);
 		print OUT "<br>\n";
-		
+
 		print OUT "<p>\n";
 		print OUT "\t<div id=\"igv_div\" style=\"padding-top:10px;padding-bottom:10px; border:1px solid lightgray\"></div>\n";
 		print OUT "</p>\n";
@@ -1721,7 +1730,7 @@ sub generate_igv_html{
         print OUT "        id:		'$id',\n";
         print OUT "        name:	'reference',\n";
         print OUT "        fastaURL:	\"",($use_data_uri)? filebin2uri("$refgen.gzip") : $refgen_file,"\",\n";
-        print OUT "        indexURL:	\"",($use_data_uri)? filebin2uri("$refgen.fai.gzip") : "$refgen_file.fai","\",\n";             
+        print OUT "        indexURL:	\"",($use_data_uri)? filebin2uri("$refgen.fai.gzip") : "$refgen_file.fai","\",\n";
         print OUT "        wholeGenomeView: true\n";
         print OUT "    },\n";
         print OUT "		tracks:[\n";
@@ -1735,8 +1744,8 @@ sub generate_igv_html{
 			print OUT "				displayMode: 'expanded'\n";
 			print OUT "			},\n";
         }
-		print OUT "			{   name:		'Contigs',\n"; 
- 	    print OUT "            type:		'alignment',\n"; 
+		print OUT "			{   name:		'Contigs',\n";
+ 	    print OUT "            type:		'alignment',\n";
         print OUT "            format:     'bam',\n";
  	    print OUT "            showCoverage: false,\n";
  	    print OUT "            showAlignments: true,\n";
@@ -1759,7 +1768,7 @@ sub generate_igv_html{
         print OUT "	console.log('Created IGV browser');\n";
         print OUT " 	init_sortable_tables();\n";
         print OUT "</script>\n";
-        
+
         print OUT "</body>\n";
         print OUT "</html>\n";
         close(OUT);
@@ -1775,7 +1784,7 @@ sub get_SQ_SN{
 	my $bam = shift(@_);
 	# tmp:
 	my $file = "$bam.h.tmp";
-	
+
 	system_call("samtools view -H $bam | grep \"^\@SQ\" 1> $file");
 	my @sn_list = ();
 	open(IN,"<$file") or die "Can\'t open $file: $!\n";
@@ -1797,7 +1806,7 @@ sub get_SQ_SN{
 
 
 sub generate_stats{
-	
+
 	# in:
 	my %opt 			= %{shift()};
 	my $r1			= defined( $opt{read1} )? $opt{read1} : 0;	# can be undefined
@@ -1808,20 +1817,20 @@ sub generate_stats{
 	my $contigs 		= "$opt{res}/contigs.fa";
 	my $idx 			= "$opt{res}/contigs.idxstats";
 	my $orfs_nt		= "$opt{res}/contigs.orfs.nt.fa";
-	
+
 	# tmp:
 	my $r1_len		= "$opt{res}/reads/read1.len";		# output if -r1 specified
 	my $r2_len		= "$opt{res}/reads/read2.len";		# output if -r2 specified
 	my $cont_len		= "$opt{res}/contigs.len";
-	
+
 	# out:
 	my $stats		= "$opt{'res'}/assembly.stats.tsv";
 	my $stats_yaml	= "$opt{'res'}/assembly.stats.yaml";
 	my $log 			= "$opt{'logs'}/$opt{'sample'}/stats.log";
 	# res/figures: contig.hist*.png, read.hist.png
 	#my $surv_fig		= "$opt{'res'}/qc.readsurv.jpeg";
-	
-	
+
+
 	print STDERR "\n# ASSEMBLY STATS\n\n";
 
 	if((-e $contigs) && (nlines($contigs)>1) && (-e $orfs_nt)){
@@ -1829,7 +1838,7 @@ sub generate_stats{
 				  	"--reads $r1 --reads_flt $r1_flt --reads_hgflt $r1_hgflt ".
 				  	"--cont $contigs --idx $idx --orfs $orfs_nt 1> $stats 2> $log", $opt{'v'});
 		system_call("perl $perl_scripts/assembly_stats.pl $contigs mean,sum,N50,LN500,Lbp500,LN1000,Lbp1000 col,names 1>> $stats 2>> $log", $opt{'v'});
-		
+
 		assembly_stats(res_dir=>$opt{res}, numth=>$opt{numth}, yaml=>$stats_yaml);
 	}
 
@@ -1844,7 +1853,7 @@ sub generate_stats{
 	if( (-e $contigs) && nlines($contigs)>1 ){
 		system_call("seqkit fx2tab -nil $contigs | cut -f2  1> $cont_len");
 	}
-	
+
 	# plot histograms
 	system("mkdir -p $opt{res}/figures");
 	if( (-e $r1_len && -e $r2_len)){
@@ -1853,7 +1862,7 @@ sub generate_stats{
 	elsif( -e $r1_len){
 		system_call("$opt{'call_R'} $R_scripts/hist_figures.R read_hist $opt{res}/figures $r1_len ");
 	}
-	
+
 	if( -e $cont_len){
 		system_call("$opt{'call_R'} $R_scripts/hist_figures.R cont_hist $opt{res}/figures $cont_len ");
 	}
@@ -1868,19 +1877,19 @@ sub generate_stats{
 
 sub pack_files{
 	print STDERR "\n# PACK FILES FOR SHARING\n\n";
-	
+
 	# in:
 	my %opt 			= %{shift()};
 	my $res			= $opt{res};
 	my $dirname		= dirname($opt{res});
 	my $basename 	= basename($opt{res});
-	
-	# out: 
+
+	# out:
 	# $dirname/$basename.tar.gz
 
 	system_call("rm -fR $dirname/$basename.tar" );
 	system_call("mkdir -p $dirname/$basename.tar" );
-	
+
 	my @files_share = ();
 	#push(@files_share, <$opt{'res'}/*.html>);
 	#push(@files_share, <$opt{'res'}/*.fa>);
@@ -1922,7 +1931,7 @@ sub pack_files{
 	push(@files_share, "$res/reports");
 		# VARIOUS
 	push(@files_share, "$res/History.log");
-	
+
 	# filter existing-files
 	my @files_share_flt = ();
 	foreach my $file(@files_share){
@@ -1931,14 +1940,14 @@ sub pack_files{
 		}
 	}
 	my $files_share_str = join(" ",@files_share_flt);
-	
+
 	system_call("cp -r $files_share_str $dirname/$basename.tar/" );
 	system_call("tar -czf $dirname/$basename.tar.gz -C $dirname/$basename.tar ." );
-	system_call("rm -fR $dirname/$basename.tar" );	
+	system_call("rm -fR $dirname/$basename.tar" );
 }
 sub clean{
 	my %opt = %{shift()};
-	
+
 	# CLEANUP
 	system_call("rm -fR $opt{res}/*.bam  $opt{'res'}/*.bai", $opt{'v'});
 	system_call("rm -fR $opt{res}/*.sam", $opt{'v'});
@@ -1949,7 +1958,7 @@ sub clean{
 	system_call("rm -fR $opt{res}/dbhits.*", $opt{v});
 	system_call("rm -fR $opt{res}/contigs.fa.amb $opt{res}/contigs.fa.ann $opt{res}/contigs.fa.bwt $opt{res}/contigs.fa.pac $opt{res}/contigs.fa.sa");
 	system_call("rm -fR $opt{res}/hostgen.sam.flt");
-}		
+}
 
 
 
@@ -1961,15 +1970,15 @@ sub clean{
 sub options_format{
 	my $subid	= "options_format()";
 	my %opt = %{ shift(@_) };
-	
+
 	if($opt{help}){
 		print $usage; exit(0);
 	}
-	
+
 	# List installed databases
 	if( $opt{databases} && defined($opt{'ann.databases'}) ){
 		print "\n# Listing Installed Reference Databases:\n";
-		
+
 		foreach my $k(sort keys %{$opt{'ann.databases'}}){
 			my $db			= $opt{'ann.databases'}->{$k};
 			my $dbpath		= $db->{db};
@@ -1990,11 +1999,11 @@ sub options_format{
 		}
 		exit(0);
 	}
-	
+
 	#List installed background filters
 	if( $opt{filters} && defined($opt{'host.databases'})){
 		print "\n# Listing Installed Background Filters:\n";
-		
+
 		foreach my $k(sort keys %{$opt{'host.databases'}}){
 			my $db		= $opt{'host.databases'}->{$k};
 			my $dbpath	= $db->{db};
@@ -2026,14 +2035,14 @@ sub options_format{
 	# Expand ENV variables, if any
 	foreach my $k1(keys %opt){
 			# hash reference
-		if( defined(ref($opt{$k1})) 
+		if( defined(ref($opt{$k1}))
 			&& ref($opt{$k1}) eq ref {}){
 			foreach my $k2( sort keys %{$opt{$k1}} ){
 					# hash reference
 				if( defined(ref($opt{$k1}->{$k2})) && ref($opt{$k1}->{$k2}) eq ref {} ){
-					
+
 					foreach my $k3( keys %{$opt{$k1}->{$k2}}){
-						
+
 						if($opt{$k1}->{$k2}->{$k3} =~ /\$(\w+)/g){
 							my $envar	= $1;
 							if(defined($ENV{$envar})){
@@ -2055,8 +2064,8 @@ sub options_format{
 						else{
 							print STDERR "WARNING: $subid: undefined environment variable \"$envar\"\n";
 						}
-					}			
-				}	
+					}
+				}
 			}
 		}
 			# hash entry
@@ -2069,10 +2078,35 @@ sub options_format{
 				else{
 					print STDERR "WARNING: $subid: undefined environment variable \"$envar\"\n";
 				}
-			}		
-		}	
+			}
+		}
 	}
-	
+
+	# TEMPORARY DIRECTORY
+	# The shipped default is $LOCAL_SCRATCH/wrkdir, and $LOCAL_SCRATCH is set only
+	# inside a Slurm job.  On a login node or an off-site install the loop above
+	# cannot expand it, and the literal string survives into a shell command where
+	# "$LOCAL_SCRATCH" expands to nothing -- so the run tried to create /wrkdir at
+	# the filesystem root, then died inside File::Temp with no usable message.
+	# Fall back through the conventional scratch variables instead.  An explicit
+	# --tmpdir is left alone: only an unresolved $VAR triggers this.
+	if( !defined($opt{tmpdir}) || $opt{tmpdir} =~ /\$\w+/ ){
+		my $root;
+		foreach my $cand ( $ENV{LOCAL_SCRATCH}, $ENV{TMPDIR}, '/tmp' ){
+			next if( !defined($cand) || $cand eq '' || !(-d $cand) || !(-w $cand) );
+			$root = $cand;
+			last;
+		}
+		if( !defined($root) ){
+			die "ERROR: $subid: cannot resolve a temporary directory: "
+			  . "\$LOCAL_SCRATCH and \$TMPDIR are unset or unusable and /tmp is not writable. "
+			  . "Pass --tmpdir explicitly.\n";
+		}
+		my $was	= defined($opt{tmpdir}) ? $opt{tmpdir} : "<unset>";
+		$opt{tmpdir}	= "$root/lazypipe";
+		print STDERR "NOTE: $subid: tmpdir \"$was\" does not resolve here, using $opt{tmpdir}\n";
+	}
+
 	# set to lower case
 	$opt{pipe}		= lc($opt{pipe});
 	$opt{pre} 		= lc($opt{pre});
@@ -2133,8 +2167,8 @@ sub options_format{
 	}
 		# final check
 	$opt{'pipe'} = \%pipeh;
-	
-	
+
+
 	# annotation strategies
 	if($opt{anns}){
 		my $strat	= lc($opt{anns});
@@ -2148,23 +2182,28 @@ sub options_format{
 			}
 			$opt{pipe}->{ann1}	= 1;
 			$opt{ann1}			= lc($ann1);
-			
+
 			if(!defined($ann2) || $ann2 eq ''){
 				$opt{pipe}->{ann2} 	= 0;
 				$opt{ann2}			= 0;
 			}
 			else{
 				$opt{pipe}->{ann2} 	= 1;
-				$opt{ann2}			= lc($ann2);	
-			}		
+				$opt{ann2}			= lc($ann2);
+			}
 		}
 		else{
-			print STDERR "ERROR: undefined annotation strategy: $strat\n";
+			# Must be fatal: leaving ann1 at its config default (0) skips
+			# pipe_annotation_round1 entirely, so the run "succeeds" having
+			# produced no annotation at all.
+			my @known	= defined($opt{'ann.strategies'}) ? sort keys %{$opt{'ann.strategies'}} : ();
+			die "ERROR: undefined annotation strategy: $strat\n".
+				(scalar(@known) ? "  defined strategies: ".join(', ',@known)."\n" : "");
 		}
-	}	
-	
-	
-	
+	}
+
+
+
 	# --read1 --read2: required for --pipe prepro, optional for --pipe stats
 		# guess read2
 	if( !$opt{se} ){ # PE-reads
@@ -2200,8 +2239,8 @@ sub options_format{
 			die "ERROR: check read2 file: $opt{read2} does not exist\n";
 		}
 	}
-	
-	
+
+
 	# --pre
 	if( $opt{pre} =~ /trimm/gi ){
 		$opt{pre} = 'trimm';
@@ -2216,16 +2255,16 @@ sub options_format{
 		print STDERR "\ninvalid option --pre $opt{pre}. Running with --pre fastp\n";
 		$opt{pre} = "fastp";
 	}
-	
+
 	# --hostgen
 		# --hostgen <undef>
 	if( !defined($opt{hostgen})  ||  !$opt{hostgen} ){
-		
+
 	}	# --hostgen <hostgenome fasta|bwa-index>
 	elsif( $opt{hostgen} =~ m/\.(fasta|faa|fna|fa)$|\.(fasta|faa|fna|fa)\.gz/gi ){
 		my @hostdb_list		= split(',',$opt{hostgen},-1);
 		my @hostdb_list2		= ();
-		
+
 		foreach my $db(@hostdb_list){
 			#if( !(-e "$db.amb") || !(-e "$db.ann") || !(-e "$db.bwt")){
 			#	die "ERROR: bwa index files .amb/.ann/.bwt not found for host-database $db\n";
@@ -2239,11 +2278,11 @@ sub options_format{
 			$hostdb{latinName}	= undef;
 			$hostdb{commonName}	= undef;
 			$hostdb{taxid}		= undef;
-			
+
 			push(@hostdb_list2,\%hostdb);
 		}
 		$opt{hostdb}		= \@hostdb_list2;
-		
+
 	}	# --hostgen <list of host.database keys>
 	else{
 		if(!defined($opt{'host.databases'})){
@@ -2263,37 +2302,37 @@ sub options_format{
 		}
 		$opt{hostdb}		= \@hostdb_list;
 	}
-	
+
 	# --ass
 	if(!(($opt{ass} eq 'megahit') || ($opt{ass} eq 'spades')) ){
 			print STDERR "\ninvalid option --ass $opt{ass}. Running with --ass megahit\n";
-			$opt{ass} = 'megahit';	
+			$opt{ass} = 'megahit';
 	}
 	# --gen
 	if( !(($opt{gen} eq 'mga') || ($opt{gen} eq 'prod') || ($opt{gen} eq 'orfipy') )){
 		print STDERR "\ninvalid option --gen $opt{gen}. Running with --gen mga\n\n";
 		$opt{gen} = 'mga';
 	}
-	
-	# --ann1 <str>: parsing to list-hash structure: $ann1[0]->{search|target|db}
-	
-	my %valid_searches 	= ('minimap'=>1,'sans'=>1,'blastn'=>1,'blastp'=>1, 'hmmscan'=>1, 'diamondx'=>1);
-	my %valid_targets	= ('ab',1,'ph',1,'vi',1,'un',1);	
 
-	
+	# --ann1 <str>: parsing to list-hash structure: $ann1[0]->{search|target|db}
+
+	my %valid_searches 	= ('minimap'=>1,'sans'=>1,'blastn'=>1,'blastp'=>1, 'hmmscan'=>1, 'diamondx'=>1);
+	my %valid_targets	= ('ab',1,'ph',1,'vi',1,'un',1);
+
+
 	if($pipeh{ann1} && defined($opt{ann1}) && $opt{ann1}){
 		# --ann1 is fixed to start with contigs.all-annotation, and complement that search by searching with contigs.un in consecutive annotations
 		my $target			= "all";
 		my @ann1 			= ();
-		my @ann1_str			= split(/,/,$opt{ann1});		
-		
+		my @ann1_str			= split(/,/,$opt{ann1});
+
 	  foreach my $dbname(@ann1_str){
 		if(!defined($opt{'ann.databases'}) || !defined($opt{'ann.databases'}->{$dbname})){
 			die "\nERROR: no database in config.yaml: $dbname\n\n";
 		}
 		my %ann	 			= %{$opt{'ann.databases'}->{$dbname}};
 		$ann{target} 		= $target;
-		
+
 		if($dbname ne 'sans'){
 			# check that database files exist
 			my $dbpath		= $ann{db};
@@ -2313,25 +2352,25 @@ sub options_format{
 	  	$opt{ann1}	= undef;
 	  }
 	}
-	
+
 	# --ann2 <str>: parsing to list-hash structure: $ann2[0]->{search|target|db}
 	if($pipeh{ann2} && defined($opt{ann2}) && $opt{ann2}){
 		my @ann2 		= ();
 		my @ann2_str		= split(/,/,$opt{ann2});
-	
+
 	  foreach my $target_dbname(@ann2_str){
-	  	
+
 	  	my ($target, $dbname)	= split(/:/,$target_dbname,2);
 		$target					= lc($target);
-		
+
 		if( !defined($valid_targets{$target}) ){
 			die "\nERROR: invalid target option: --ann2 $target:$dbname\n\n";
 		}
-		
+
 		if(!defined($opt{'ann.databases'}) || !defined($opt{'ann.databases'}->{$dbname})){
 			die "\nERROR: no database in config.yaml:  $dbname\n\n";
 		}
-		
+
 		my %ann 				= %{$opt{'ann.databases'}->{$dbname}};
 		$ann{target}			= $target;
 
@@ -2353,13 +2392,13 @@ sub options_format{
 	  	$opt{ann2}	= undef;
 	  }
 	}
-	
+
 	# --pipe report
 	if( !(($opt{wmodel} eq 'taxacount') || ($opt{wmodel} eq 'bitscore') || ($opt{wmodel} eq 'bitscore2')) ){
 		print STDERR "\nWARNING: invalid option --wmodel $opt{wmodel}. Running with --wmodel bitscore\n\n";
 		$opt{wmodel} = 'bitscore';
 	}
-	
+
 	# --RES --SAMPLE: RESDIR
 	if( !$opt{res} ){
 		$opt{res}	= "results";
@@ -2373,14 +2412,14 @@ sub options_format{
 		if($opt{trimm_sample_name}){
 			$opt{sample}=~ s/_.*//g;
 		}
-	}	
+	}
 	$opt{res}		= "$opt{res}/$opt{sample}";
-	
+
 	# TAXONOMY
 	if( !defined($opt{taxonomy}) || !defined($opt{taxonomy}->{db})  ){
 		die "ERROR: missing or invalid 'taxonomy' settings\n";
 	}
-	
+
 	system_call("mkdir -p $opt{res}");
 	system_call("mkdir -p $opt{tmpdir}");
 	system_call("mkdir -p $opt{logs}/$opt{sample}");
@@ -2391,26 +2430,26 @@ sub options_format{
 	# THREADS
 	if( !$opt{'numth'} ){
 		$opt{'numth'}	= 1;
-	}		
-		
+	}
+
 	# CREATE tmpdir
 	if( defined($opt{'tmpdir_keep'}) && $opt{'tmpdir_keep'} ){
 		$opt{'tmpdir'} 	 	= tempdir("lazypipe_XXXXXXXX", DIR => $opt{'tmpdir'}, CLEANUP => 0);
 	}
 	else{
 		$opt{'tmpdir'} 	 	= tempdir("lazypipe_XXXXXXXX", DIR => $opt{'tmpdir'}, CLEANUP => 1);
-	}	
-	
+	}
+
 	# R ENVIRONMENT
 	$opt{call_R} 		= "Rscript" if( !$opt{call_R} );
 	$ENV{TMPDIR} 		= $opt{tmpdir};
 	my $renviron_local	= $opt{tmpdir}."/.Renviron";
 	system("echo \"TMPDIR=$opt{tmpdir}\" > $renviron_local");
 	system("echo \"TMP=$opt{tmpdir}\" >> $renviron_local");
-	$ENV{R_ENVIRON_USER}	= $renviron_local;	
-	
+	$ENV{R_ENVIRON_USER}	= $renviron_local;
+
 	# CHECK BINARIES AVAILABLE
-	my $pigz = `sh -c 'command -v pigz'`; 
+	my $pigz = `sh -c 'command -v pigz'`;
 	if($pigz){
 		$opt{'gzip'} = "pigz -p $opt{'numth'}";
 	}
@@ -2435,11 +2474,11 @@ sub update_taxonomy{
 	my $opt 				= shift(@_);
 	my $taxonomy			= $opt->{taxonomy};
 	my $taxonomy_nodes	= "$taxonomy->{db}/nodes.dmp";
-	
+
 	# UPDATING TAXONOMY FILES: this will also load taxonomy on the very first usage
-	if( (-e "$taxonomy_nodes") 
+	if( (-e "$taxonomy_nodes")
 			&& ((-M "$taxonomy_nodes") > $taxonomy->{update_time}) ){
-				
+
 		system_call("wget -q $taxonomy->{url} -O $taxonomy->{db}/taxdump.tar.gz", $opt{'v'});
 		system_call("tar -xzf $taxonomy->{db}/taxdump.tar.gz -C $taxonomy->{db}", $opt{'v'});
 	}
@@ -2456,15 +2495,15 @@ sub readfasta{
 	my %sequence;
 	my $header;
 	my $temp_seq;
-	
+
 	#suppose fasta files contains multiple sequences;
-	 
+
 	open (IN, "<$file") or die "couldn't open the file $file $!";
-	
-	while (<IN>){	
+
+	while (<IN>){
 		chop;
-		next if /^\s*$/; #skip empty line 
-		if ($_ =~ s/^>//){	
+		next if /^\s*$/; #skip empty line
+		if ($_ =~ s/^>//){
 			$header= $_;
 			if($sequence{$header}){
 				print colored("#CAUTION: SAME FASTA HAS BEEN READ MULTIPLE TIMES.\n#CAUTION: PLEASE CHECK FASTA SEQUENCE:$header\n","red");
@@ -2503,7 +2542,7 @@ sub print_file{
 #	'contigs'
 #	'contigs500bp'
 #	'contigs1000bp'
-# 
+#
 # USAGE:
 # my %stats 		= assembly_stats(res_dir=>$mypath);
 # say "Reads after trimming:";
@@ -2527,13 +2566,13 @@ sub assembly_stats{
 	if(!defined($args{res_dir})){
 		die "ERROR: $subid: missing argument: 'res_dir'";
 	}
-		
+
 	# in:
 	my $res_dir		= $args{res_dir};
-	# $args{yaml}	is optional 
+	# $args{yaml}	is optional
 	my $r1_trim		= (-e "$res_dir/reads/read1.trim.fq.gz") ? "$res_dir/reads/read1.trim.fq.gz": "$res_dir/reads/read1.trim.fq";
-	my $r1_hgflt		= 
-		(-e "$res_dir/reads/read1.trim.hflt.fq.gz") ? "$res_dir/reads/read1.trim.hflt.fq.gz": 
+	my $r1_hgflt		=
+		(-e "$res_dir/reads/read1.trim.hflt.fq.gz") ? "$res_dir/reads/read1.trim.hflt.fq.gz":
 			(-e "$res_dir/reads/read1.trim.hflt.fq") ? "$res_dir/reads/read1.trim.hflt.fq" : $r1_trim;
 	my $contigs_fa	= "$res_dir/contigs.fa";
 	my $orfs_fa		= "$res_dir/contigs.orfs.nt.fa";
@@ -2552,15 +2591,15 @@ sub assembly_stats{
 	my $ids_tmp		= "$res_dir/ids.tmp";
 	my $ids2_tmp		= "$res_dir/ids2.tmp";
 	my $ids3_tmp		= "$res_dir/ids3.tmp";
-	
+
 	# out:
 	my $stats_yaml	= "$res_dir/assembly.stats.yaml";
-	
+
 	# params:
 	my $threads 		= $args{numth} || 8;
 
-	
-	
+
+
 	# START WORKING
 	#	STATS FOR READS
 	my %stats		= ();
@@ -2569,7 +2608,7 @@ sub assembly_stats{
 		#seqkit stats -a: num_seqs	sum_len	min_len	avg_len	max_len	Q1	Q2	Q3	sum_gap	N50	Q20(%)	Q30(%)	GC(%)
 	my %tmp			= read_tsv2hashtable($seqkit_tmp,'file');
 	my @read_stats_keys	= ("number_of_reads",'minimum_length','mean_length','median_length','maximum_length','total_length','GC(%)','Q20(%)','Q30(%)');
-	my %rename	= 
+	my %rename	=
 		(num_seqs	=> "number_of_reads",
 		 min_len		=> 'minimum_length',
 		 max_len		=> 'maximum_length',
@@ -2601,10 +2640,10 @@ sub assembly_stats{
 		if( defined($rowp->{$k})){
 			$stats_3{$rename{$k}}		= $rowp->{$k};
 		}}
-	
+
 	# STATS FOR CONTIGS
 	my @contig_stats_keys	= ("number_of_contigs",'number_of_ORFs','minimum_length','mean_length','median_length','maximum_length','total_length','N50','GC(%)');
-	my %renamec	= 
+	my %renamec	=
 		(num_seqs	=> "number_of_contigs",
 		 min_len		=> 'minimum_length',
 		 max_len		=> 'maximum_length',
@@ -2616,7 +2655,7 @@ sub assembly_stats{
 		 N50			=> 'N50',
 		 'GC(%)'		=> 'GC(%)'
 		 );
-	
+
 	# STATS FOR ALL CONTIGS
 	system_call("seqkit stats -j $threads -baT $contigs_fa 1> $seqkit_tmp");
 	%tmp			= read_tsv2hashtable($seqkit_tmp,'file');
@@ -2630,8 +2669,8 @@ sub assembly_stats{
 		# number of ORFs
 	system_call("seqkit seq -ni $orfs_fa 1> $ids2_tmp");
 	$conts_1{'number_of_ORFs'}	= nlines($ids2_tmp);
-	
-	
+
+
 	# STATS FOR CONTIGS > 500 BP
 	my $min_len	= 500;
 	system_call("seqkit seq -j $threads -g --min-len $min_len $contigs_fa | seqkit stats -j $threads -baT 1> $seqkit_tmp");
@@ -2679,9 +2718,9 @@ sub assembly_stats{
 	else{
 		$conts_3{number_of_ORFs}	= 0;
 	}
-	# </new code>	
-	
-	
+	# </new code>
+
+
 	# COLLECT 2nd LEVEL HASHES TO 1st LEVEL HASH
 	$stats_1{'median_length'}	= $stats_1{Q2};
 	$stats_2{'median_length'}	= $stats_2{Q2};
@@ -2696,14 +2735,14 @@ sub assembly_stats{
 	$conts_2{'keys'}				= \@contig_stats_keys;
 	$conts_3{'keys'}				= \@contig_stats_keys;
 	$stats{'reads.trimmed'} 		= \%stats_1;		# reads after trimming
-	$stats{'reads.hostflt'} 		= \%stats_2;		# reads after host filtering 
+	$stats{'reads.hostflt'} 		= \%stats_2;		# reads after host filtering
 	$stats{'reads.assembled'} 	= \%stats_3;		# reads after assembling
 	$stats{'contigs'} 			= \%conts_1;		# all contigs
-	$stats{'contigs.500bp'} 		= \%conts_2;		
-	$stats{'contigs.1000bp'} 	= \%conts_3;	
+	$stats{'contigs.500bp'} 		= \%conts_2;
+	$stats{'contigs.1000bp'} 	= \%conts_3;
 	my @tmp						= ('reads.trimmed','reads.hostflt','reads.assembled','contigs','contigs.500bp','contigs.1000bp');
 	$stats{keys}					= \@tmp;
-	
+
 	# WRITE YAML
 	if(defined($args{yaml})){
 		open(OUT, ">$args{yaml}") or die "couldn't open file $args{yaml} $!";
@@ -2741,9 +2780,9 @@ sub add_bphage_field{
 	if($VERBAL){
 		print STDERR "\n\t$SIGNATURE\n";
 	}
-	
+
  	# Check input:
-  	my (%args)			= @_;	
+  	my (%args)			= @_;
  	if( !defined($args{annot})){
  		die "ERROR: $SIGNATURE: missing input: annot";}
  	if( !defined($args{phfilter})){
@@ -2752,7 +2791,7 @@ sub add_bphage_field{
  		die "ERROR: $SIGNATURE: missing input: log";}
   	if( !defined($args{taxonomy})){
  		die "ERROR: $SIGNATURE: missing input: taxonomy";}
-	
+
 	# in/out:
 	my $annot 				= $args{annot};
 	my $phfilter				= $args{phfilter};
@@ -2789,7 +2828,7 @@ sub add_bphage_field{
 				"taxonkit lineage -i1 -t --data-dir $taxonomy -j  $numth | ".
 				"csvtk cut -tlf1,3 | ".
 				"csvtk add-header -tn taxid,lineage 1> $vi_taxid_lineage 2>> $log" );
-	
+
 	my %taxid_lineage	= read_tsv2hash($vi_taxid_lineage,"taxid","lineage");
 	my %phflt_taxids		= read_tsv2hash($phfilter,"taxid","taxid");
 	my %phage_taxids		= ();
@@ -2802,18 +2841,18 @@ sub add_bphage_field{
 			}
 		}
 	}
-	
+
 	# adding bphage flag to $annot
 	my $divisioni			= colind($annot,'division') -1; # colind returns 1-based index
 		# search for an existing bphage-flag:
-	my $bphagei				= colind($annot,'bphage') -1;	
+	my $bphagei				= colind($annot,'bphage') -1;
 	my $has_bphage_header	= ($bphagei >= 0) ? 1 : 0;
-	
-	open(IN,"<$annot") or die "$SIGNATURE: Can\'t open $annot: $!\n";	
+
+	open(IN,"<$annot") or die "$SIGNATURE: Can\'t open $annot: $!\n";
 	open(OUT,">$annot_tmp") or die "$SIGNATURE: Can\'t open $annot_tmp: $!\n";
 	my $l=<IN>;
 	chomp($l);
-	if( $has_bphage_header){	
+	if( $has_bphage_header){
 		print OUT $l,"\n";
 	}
 	else{
@@ -2837,7 +2876,7 @@ sub add_bphage_field{
 		elsif( $overwrite ){
 			$sp[$bphagei]	= $bphage;
 		}
-		
+
 		print OUT join("\t",@sp),"\n";
 	}
 	close(IN);close(OUT);
@@ -2857,9 +2896,9 @@ sub add_bphage_field{
 #
 sub add_division_field{
 	my $subid	= "add_division_field()";
-	
+
 	# in/out:
-	my (%args)				= @_;	
+	my (%args)				= @_;
 	my $annot 				= $args{annot} || die "ERROR: $subid: missing input: annot";
 	my $taxonomy				= $args{taxonomy} || die "ERROR: $subid: missing input: taxonomy";
 	my $numth				= $args{numth} || 8;
@@ -2885,7 +2924,7 @@ sub add_division_field{
 
 	# tmp:
 	my $annot_tmp			= "$annot.tmp";
-	
+
 	# read nodes.dmp
 	my %taxid_div		= ();
 	my $taxidi			= 0;
@@ -2903,7 +2942,7 @@ sub add_division_field{
 		$taxid_div{$sp[$taxidi]} = $sp[$divi];
 	}
 	close(IN);
-	
+
 	# read merged.dmp
 	my %merged		= ();
 	open(IN,"<$mergeddmp") or die "Can\'t open $mergeddmp: $!\n";
@@ -2920,7 +2959,7 @@ sub add_division_field{
 		$merged{$sp[0]} = $sp[1];
 	}
 	close(IN);
-	
+
 	# read divisions.dmp
 	my %divid_name		= ();
 	open(IN,"<$divdmp") or die "Can\'t open $divdmp: $!\n";
@@ -2931,11 +2970,11 @@ sub add_division_field{
 		$divid_name{$sp[0]} = $sp[2];
 	}
 	close(IN);
-	
+
 	# link division
-	my $divcoli				= colind($annot,'division') -1;	
+	my $divcoli				= colind($annot,'division') -1;
 	my $has_division_header	= ($divcoli >= 0) ? 1 : 0;
-	open(IN,"<$annot") or die "ERROR: $subid: Can\'t open $annot: $!\n";	
+	open(IN,"<$annot") or die "ERROR: $subid: Can\'t open $annot: $!\n";
 	open(OUT,">$annot_tmp") or die "ERROR: $subid: Can\'t open $annot_tmp: $!\n";
 	my $l=<IN>;
 	chomp($l);
@@ -2951,7 +2990,7 @@ sub add_division_field{
 		my $taxid	= $sp[$annot_taxidi];
 		if(defined($merged{$taxid})){
 			$taxid		= $merged{$taxid} ;
-		}		
+		}
 		my $division= (defined($taxid_div{$taxid}) && defined($divid_name{$taxid_div{$taxid}}))? $divid_name{$taxid_div{$taxid}}: 'NA';
 		if(!$has_division_header){
 			push(@sp,$division);

@@ -391,7 +391,7 @@ host.databases:
       url:        "https://a3s.fi/lazypipe-hostgen/GCF_016772045.2_genomic+rna.tar.gz"
    Rattus_norvegicus:
       accession:  "GCF_036323735.1"
-      db:         "$data/hostgen/GCF_036323735.1_genomic+rna.fna.gz"
+      db:         "$hostgenomes/GCF_036323735.1_genomic+rna.fna.gz"
       name:       "Norwegian rat genomic+rna"
       latinName:  "Rattus norvegicus"
       commonName: "Rat"

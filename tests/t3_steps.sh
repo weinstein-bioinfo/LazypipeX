@@ -1,0 +1,660 @@
+#!/usr/bin/env bash
+#
+# LazypipeX Tier 3 — step-wise pipeline tests on sample data.
+# Implements STEP-01 … STEP-16 of docs/testing_roadmap.md §6.
+#
+# Every pipeline step is invoked separately against the bundled toy library
+# data/samples/M15small_R{1,2}.fastq (9 842 read pairs from a mink faecal
+# sample), so a failure localises to one step instead of one long run.
+#
+# The steps are a chain: each consumes the previous step's output.  A step whose
+# prerequisite did not pass is reported as a SKIP rather than run, because a
+# cascade of failures from one broken step tells you nothing you did not already
+# know from the first one.
+#
+# Needs installed databases (Tier 2 green) and the full tool chain.  Wall time is
+# 10-30 min depending on the databases chosen below.
+#
+# Usage:
+#     module use /projappl/project_2003755/Lazypipe-db/modulefiles/projects
+#     module load lazypipe/3.1
+#     tests/t3_steps.sh                # TAP on stdout
+#     tests/t3_steps.sh | grep -v ^#   # results only
+#
+# Which databases the annotation steps use is site-specific, so they come from
+# the environment.  The defaults are the small virus-only sets: they exercise the
+# same code paths as the large ones and keep the tier inside its time budget —
+# §6 names minimap.refseq.abv for STEP-06, but that is a 28 GB FASTA and
+# minimap2 indexes its target on the fly, which alone would exceed the budget.
+#
+#     T3_ANN1=minimap.refseq.abv tests/t3_steps.sh
+#
+# Set T3_KEEP=1 to leave the results tree behind for inspection.
+#
+# Exit status = number of failed tests (0 = all good).  Neither skips nor TODOs
+# are failures: skips mark absent optional tooling or an unrun prerequisite,
+# TODOs mark known defects documented in docs/testing_roadmap.md §12.
+
+set -uo pipefail
+
+TESTS_DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+# shellcheck source=lib/assert.sh
+. "$TESTS_DIR/lib/assert.sh"
+
+REPO=$( cd "$TESTS_DIR/.." && pwd )
+
+if [ -n "${LAZYPIPE_INSTALL_DIR:-}" ] && [ -f "$LAZYPIPE_INSTALL_DIR/lazypipe.pl" ]; then
+	INSTALL="$LAZYPIPE_INSTALL_DIR"
+else
+	INSTALL="$REPO"
+fi
+
+LZP="$INSTALL/lazypipe.pl"
+R1="$INSTALL/data/samples/M15small_R1.fastq"
+
+: "${T3_SAMPLE:=M15test}"
+: "${T3_HOSTGEN:=Neovison_vison}"
+: "${T3_HOSTGEN_OTHER:=Ixodes_scapularis}"	# a filter that should NOT match mink
+: "${T3_ANN1:=minimap.refseq.vi}"		# virus-only and small: seconds, not minutes
+# Second engine, for --append and chaining.  The virus-only set is 0.55 GB and
+# answers in seconds; uniref100.abv is 33 GB and takes about nine minutes, which
+# would be the bulk of this tier's runtime for no extra coverage — .vi already
+# grows annot1.tsv and puts a second engine in the 'search' column, which is what
+# STEP-07 and STEP-08 assert.  Point this at .abv for a deeper pass.
+: "${T3_ANN1_ALT:=diamondp.uniref100.vi}"
+# Round 2 against the virus-only index too.  STEP-09 asserts the mechanics — that
+# round 2 re-searches a subset of round 1 — and the viral index proves that in a
+# second rather than the 95 s blastn.refseq.abv took, which was 42 % of the whole
+# tier.  The classical minimap.vi -> blastn.abv two-round strategy is a biological
+# question, not a mechanical one, and is covered by Tier 4.
+: "${T3_ANN2:=vi:blastn.refseq.vi}"
+: "${T3_NUMTH:=8}"
+: "${T3_STEP_TIMEOUT:=1800}"
+: "${T3_KEEP:=0}"
+
+# Results must never land in the repository.
+WORK=$( mktemp -d "${TMPDIR:-/tmp}/lazytest-t3.XXXXXX" ) || exit 99
+if [ "$T3_KEEP" = "1" ]; then
+	trap 'printf "# results kept at %s\n" "$WORK"' EXIT
+else
+	trap 'rm -rf "$WORK"' EXIT
+fi
+
+RES="$WORK/res"
+TMPD="$WORK/tmp"
+LOGS="$WORK/logs"
+OUT="$RES/$T3_SAMPLE"		# lazypipe.pl appends the sample name to --res
+mkdir -p "$RES" "$TMPD" "$LOGS"
+
+cd "$INSTALL" || exit 99
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+TREE_BEFORE=$( git -C "$REPO" status --porcelain 2>/dev/null )
+
+# Records of what passed, so a dependent step can skip instead of cascading.
+PASSED=""
+mark_ok() { PASSED="$PASSED $1"; }
+
+# need ID "desc" PREREQ...  -> 1 (and emits the SKIP) if any prerequisite is missing
+need() {
+	local id="$1" desc="$2" p
+	shift 2
+	for p in "$@"; do
+		case " $PASSED " in
+			*" $p "*) ;;
+			*) skipt "$id" "$desc" "prerequisite $p did not pass"; return 1 ;;
+		esac
+	done
+	return 0
+}
+
+# Undefined-variable warnings seen across the whole tier, reported once at the
+# end.  $TM is expected: config.yaml's par_trimm names it, and it is unset unless
+# trimmomatic is installed — harmless while --pre is fastp, which is the default.
+UNDEF_VARS=""
+STEP_TIMES=""
+TOTAL_SECS=0
+_SECS=""
+
+# Run one pipeline step.  Sets $_RC/$_OUT (via try_sh) and $_XCUT to any
+# cross-cutting problem: §6 requires exit 0, no ERROR: on stderr, no undefined
+# environment variable, and a new History.log line for every invocation.
+lz_step() {
+	local args="$1" hist_before=0 hist_after=0 v t0
+	[ -s "$OUT/History.log" ] && hist_before=$( wc -l < "$OUT/History.log" )
+
+	t0=$( date +%s )
+	TEST_TIMEOUT="$T3_STEP_TIMEOUT" try_sh "perl '$LZP' -1 '$R1' --res '$RES' \
+		-s '$T3_SAMPLE' -t $T3_NUMTH --tmpdir '$TMPD' --logs '$LOGS' -v $args"
+	# Recorded by report_step, never asserted on: §1 says flag order-of-magnitude
+	# drift, not absolute runtimes, which vary with databases and filesystem.
+	_SECS=$(( $( date +%s ) - t0 ))
+
+	_XCUT=""
+	[ "$_RC" -eq 0 ] || _XCUT="$_XCUT\n  exit status $_RC"
+	if printf '%s' "$_OUT" | grep -q '^ERROR:'; then
+		_XCUT="$_XCUT\n  ERROR: on stderr: $( printf '%s' "$_OUT" | grep -m1 '^ERROR:' | cut -c1-90 )"
+	fi
+	for v in $( printf '%s' "$_OUT" | sed -n 's/.*undefined environment variable "\([A-Za-z_][A-Za-z0-9_]*\)".*/\1/p' | sort -u ); do
+		case " $UNDEF_VARS " in *" $v "*) ;; *) UNDEF_VARS="$UNDEF_VARS $v" ;; esac
+		[ "$v" = "TM" ] || _XCUT="$_XCUT\n  undefined environment variable \$$v"
+	done
+	[ -s "$OUT/History.log" ] && hist_after=$( wc -l < "$OUT/History.log" )
+	if [ "$hist_after" -le "$hist_before" ]; then
+		_XCUT="$_XCUT\n  no new line in History.log"
+	fi
+	return 0
+}
+
+# Reads in a fastq(.gz).
+nreads() {
+	[ -s "$1" ] || { printf '0'; return 0; }
+	case "$1" in
+		*.gz) printf '%s' "$(( $( zcat "$1" | wc -l ) / 4 ))" ;;
+		*)    printf '%s' "$(( $( wc -l < "$1" ) / 4 ))" ;;
+	esac
+}
+
+nrecords() { [ -s "$1" ] && grep -c '^>' "$1" || printf '0'; }
+
+# Shortest sequence in a FASTA, for the length-threshold assertions.
+min_seqlen() {
+	[ -s "$1" ] || { printf '0'; return 0; }
+	awk '/^>/ { if(n) print l; l=0; n=1; next } { l+=length($0) } END { if(n) print l }' "$1" \
+		| sort -n | head -1
+}
+
+# Report a step: $3 empty means the step is good.
+report_step() {
+	local id="$1" desc="$2" bad="$3"
+	# Steps that only inspect earlier output (STEP-05, STEP-11) never call
+	# lz_step, so there is no time to attribute to them.
+	if [ -n "${_SECS:-}" ]; then
+		STEP_TIMES="$STEP_TIMES  $id ${_SECS}s\n"
+		TOTAL_SECS=$(( TOTAL_SECS + _SECS ))
+		_SECS=""
+	fi
+	if [ -z "$bad" ]; then
+		pass "$id" "$desc"
+		mark_ok "$id"
+	else
+		fail "$id" "$desc" "$( printf '%b' "$bad" )"
+	fi
+}
+
+# ----------------------------------------------------------------- report ---
+
+tap_init "LazypipeX Tier 3 — step-wise pipeline tests"
+diag "host        : $( hostname )"
+diag "date        : $( date -Is )"
+diag "install dir : $INSTALL"
+diag "results     : $RES"
+diag "sample      : $T3_SAMPLE  ($( nreads "$R1" ) read pairs)"
+diag "hostgen     : $T3_HOSTGEN"
+diag "ann1        : $T3_ANN1   (alt: $T3_ANN1_ALT)"
+diag "ann2        : $T3_ANN2"
+diag ""
+
+if [ ! -s "$R1" ]; then
+	fail STEP-00 "the bundled sample library is present" "missing $R1"
+	diag ""
+	tap_done
+	exit $?
+fi
+
+# ================================================== STEP-01 preprocess =======
+
+lz_step "-p pre"
+s01="$_XCUT"
+IN_PAIRS=$( nreads "$R1" )
+TRIM1="$OUT/reads/read1.trim.fq.gz"
+TRIM2="$OUT/reads/read2.trim.fq.gz"
+for f in "$TRIM1" "$TRIM2" "$OUT/reports/fastp.report.html" "$OUT/reports/fastp.json"; do
+	[ -s "$f" ] || s01="$s01\n  missing or empty ${f#$OUT/}"
+done
+TRIM_PAIRS=$( nreads "$TRIM1" )
+if [ "$TRIM_PAIRS" -gt 0 ] && [ "$IN_PAIRS" -gt 0 ]; then
+	pct=$(( TRIM_PAIRS * 100 / IN_PAIRS ))
+	[ "$pct" -ge 80 ] || s01="$s01\n  kept $TRIM_PAIRS/$IN_PAIRS pairs (${pct}%), below the 80% floor"
+else
+	s01="$s01\n  no trimmed pairs"
+fi
+# The JSON must parse: a truncated fastp report is a silent corruption.
+if [ -s "$OUT/reports/fastp.json" ] && have perl; then
+	perl -MJSON::PP -e 'JSON::PP->new->decode(do{local $/; open my $f,"<",$ARGV[0] or die; <$f>})' \
+		"$OUT/reports/fastp.json" >/dev/null 2>&1 \
+		|| perl -e 'my $s=do{local $/; open my $f,"<",$ARGV[0] or die; <$f>}; die unless $s=~/^\s*\{.*\}\s*$/s' \
+			"$OUT/reports/fastp.json" >/dev/null 2>&1 \
+		|| s01="$s01\n  reports/fastp.json does not parse as JSON"
+fi
+report_step STEP-01 "preprocess: trimmed pairs $TRIM_PAIRS/$IN_PAIRS, fastp report written" "$s01"
+
+# ================================================ STEP-02 host filtering =====
+
+if need STEP-02 "host filtering removes host reads" STEP-01; then
+	lz_step "-p flt --hostgen $T3_HOSTGEN"
+	s02="$_XCUT"
+	HFLT1="$OUT/reads/read1.trim.hflt.fq.gz"
+	HFLT2="$OUT/reads/read2.trim.hflt.fq.gz"
+	for f in "$HFLT1" "$HFLT2"; do
+		[ -s "$f" ] || s02="$s02\n  missing or empty ${f#$OUT/}"
+	done
+	HFLT_PAIRS=$( nreads "$HFLT1" )
+	if [ "$HFLT_PAIRS" -le 0 ]; then
+		s02="$s02\n  host filtering left 0 reads"
+	elif [ "$HFLT_PAIRS" -ge "$TRIM_PAIRS" ]; then
+		s02="$s02\n  filtered ($HFLT_PAIRS) is not less than input ($TRIM_PAIRS) — did the filter run?"
+	fi
+	report_step STEP-02 "host filtering: $HFLT_PAIRS/$TRIM_PAIRS pairs kept against $T3_HOSTGEN" "$s02"
+fi
+
+# ==================================================== STEP-03 assembly =======
+
+if need STEP-03 "assembly with megahit" STEP-02; then
+	lz_step "-p ass --ass megahit"
+	s03="$_XCUT"
+	CONTIGS="$OUT/contigs.fa"
+	NCONTIG=$( nrecords "$CONTIGS" )
+	if [ "$NCONTIG" -lt 1 ]; then
+		s03="$s03\n  contigs.fa missing or has no records"
+	else
+		minlen=$( min_seqlen "$CONTIGS" )
+		minreq=$( perl -MYAML::Tiny -e '
+			my $y = YAML::Tiny->read("config.yaml");
+			print $y->[0]{"general.parameters"}{min_contig_length} // 300;' 2>/dev/null )
+		minreq=${minreq:-300}
+		[ "$minlen" -ge "$minreq" ] \
+			|| s03="$s03\n  shortest contig is ${minlen}nt, below min_contig_length ($minreq)"
+	fi
+	report_step STEP-03 "assembly: $NCONTIG contigs, shortest $( min_seqlen "$OUT/contigs.fa" )nt" "$s03"
+fi
+
+# =============================================== STEP-03b spades assembly ====
+
+if ! have spades.py; then
+	skipt STEP-03b "assembly with spades" "spades.py not on PATH"
+elif [ "${T3_SPADES:-0}" != "1" ]; then
+	# Off by default: a second full assembly doubles the tier's runtime and
+	# overwrites contigs.fa, which every later step depends on.
+	skipt STEP-03b "assembly with spades" "set T3_SPADES=1 to run (overwrites contigs.fa)"
+else
+	lz_step "-p ass --ass spades"
+	s03b="$_XCUT"
+	[ -s "$OUT/contigs.fa" ] || s03b="$s03b\n  missing contigs.fa"
+	report_step STEP-03b "assembly with spades" "$s03b"
+fi
+
+# ===================================================== STEP-04 realign =======
+
+if need STEP-04 "realign reads to contigs" STEP-03; then
+	lz_step "-p rea"
+	s04="$_XCUT"
+	MAP="$OUT/readid_contigid.tsv"
+	if [ ! -s "$MAP" ]; then
+		s04="$s04\n  missing or empty readid_contigid.tsv"
+	else
+		nmap=$( wc -l < "$MAP" )
+		[ "$nmap" -gt 0 ] || s04="$s04\n  readid_contigid.tsv has no rows"
+		# Every contig named in the map must exist in contigs.fa, or the map is
+		# stale relative to the assembly it claims to describe.
+		# readid_contigid.tsv is headerless: readid<TAB>contigid, one pair per line.
+		orphan=$( awk -F'\t' '{ print $2 }' "$MAP" | sort -u > "$WORK/map_ctg.txt"
+			grep '^>' "$OUT/contigs.fa" | sed 's/^>//; s/[[:space:]].*//' | sort -u > "$WORK/fa_ctg.txt"
+			comm -23 "$WORK/map_ctg.txt" "$WORK/fa_ctg.txt" | head -3 | tr '\n' ' ' )
+		[ -z "$orphan" ] || s04="$s04\n  contig ids in the map are absent from contigs.fa: $orphan"
+	fi
+	report_step STEP-04 "realign: $( [ -s "$MAP" ] && wc -l < "$MAP" || echo 0 ) read-to-contig rows" "$s04"
+fi
+
+# ============================================== STEP-05 ORF prediction =======
+
+# ORFs are produced by the realign step, not by a --pipe step of their own, so
+# this asserts on what STEP-04 already wrote rather than running the pipeline
+# again.  Only the default predictor (--gen mga) is exercised: prodigal is being
+# discontinued in favour of orfipy, so pinning a test to --gen prod would pin it
+# to a code path on its way out.
+if need STEP-05 "ORF prediction" STEP-04; then
+	s05=""
+	AA="$OUT/contigs.orfs.aa.fa"
+	NT="$OUT/contigs.orfs.nt.fa"
+	for f in "$AA" "$NT"; do
+		[ -s "$f" ] || s05="$s05\n  missing or empty ${f#$OUT/}"
+	done
+	if [ -s "$AA" ] && [ -s "$NT" ]; then
+		naa=$( nrecords "$AA" )
+		nnt=$( nrecords "$NT" )
+		[ "$naa" -eq "$nnt" ] || s05="$s05\n  aa has $naa records, nt has $nnt — they must match"
+		minorf=$( min_seqlen "$NT" )
+		minreq=$( perl -MYAML::Tiny -e '
+			my $y = YAML::Tiny->read("config.yaml");
+			print $y->[0]{"general.parameters"}{min_orf_length} // 72;' 2>/dev/null )
+		minreq=${minreq:-72}
+		[ "$minorf" -ge "$minreq" ] \
+			|| s05="$s05\n  shortest ORF is ${minorf}nt, below min_orf_length ($minreq)"
+	fi
+	report_step STEP-05 "ORF prediction: $( nrecords "$AA" ) ORFs, shortest $( min_seqlen "$NT" )nt" "$s05"
+fi
+
+# ======================================= STEP-06 annotation round 1 ==========
+
+# The column list in §6 is from an older generation of the file: it names
+# contig/clen/species, while annot1.tsv carries qseqid/qseqlen and no species
+# column.  Asserted here against what the pipeline actually writes.
+ANNOT1_COLS="search db dbtype qseqid orf qseqlen sseqid bitscore alen pident qlen qcov slen scov staxid sname bphage division"
+
+if need STEP-06 "annotation round 1 with $T3_ANN1" STEP-05; then
+	lz_step "-p ann1 --ann1 $T3_ANN1"
+	s06="$_XCUT"
+	A1="$OUT/annot1.tsv"
+	if [ ! -s "$A1" ]; then
+		s06="$s06\n  missing or empty annot1.tsv"
+	else
+		hdr=$( head -1 "$A1" )
+		for c in $ANNOT1_COLS; do
+			printf '%s' "$hdr" | tr '\t' '\n' | grep -qx -- "$c" \
+				|| s06="$s06\n  annot1.tsv has no '$c' column"
+		done
+		rows=$(( $( wc -l < "$A1" ) - 1 ))
+		[ "$rows" -ge 1 ] || s06="$s06\n  annot1.tsv has a header but no rows"
+		# The sample is a mink faecal library with known viral content, so a run
+		# that annotates nothing as viral has found nothing worth finding.
+		dcol=$( printf '%s' "$hdr" | tr '\t' '\n' | grep -nx division | cut -d: -f1 )
+		if [ -n "$dcol" ]; then
+			nvi=$( awk -F'\t' -v c="$dcol" 'NR>1 && $c=="Viruses" { n++ } END { print n+0 }' "$A1" )
+			[ "$nvi" -ge 1 ] || s06="$s06\n  no row with division=Viruses; the viral contigs went unannotated"
+		fi
+		# and the viral contigs must have been written out for round 2
+		[ -s "$OUT/contigs.ann1.vi.fa" ] \
+			|| s06="$s06\n  contigs.ann1.vi.fa is missing or empty"
+		# Every staxid must resolve, or the downstream binning is built on sand.
+		if have taxonkit && [ -n "${taxonomy_ncbi:-}" ] && [ "$rows" -ge 1 ]; then
+			col=$( printf '%s' "$hdr" | tr '\t' '\n' | grep -nx staxid | cut -d: -f1 )
+			awk -F'\t' -v c="$col" 'NR>1 && $c ~ /^[0-9]+$/ { print $c }' "$A1" | sort -u > "$WORK/staxids.txt"
+			if [ -s "$WORK/staxids.txt" ]; then
+				unres=$( taxonkit lineage --data-dir "$taxonomy_ncbi" < "$WORK/staxids.txt" 2>/dev/null \
+					| awk -F'\t' '$2 == "" { print $1 }' | head -3 | tr '\n' ' ' )
+				[ -z "$unres" ] || s06="$s06\n  staxids that do not resolve in the taxonomy: $unres"
+			fi
+		fi
+	fi
+	report_step STEP-06 "annotation round 1: $( [ -s "$A1" ] && echo $(( $( wc -l < "$A1" ) - 1 )) || echo 0 ) rows from $T3_ANN1" "$s06"
+fi
+
+# ======================================= STEP-07 round 1, --append ===========
+
+if need STEP-07 "round 1 --append grows annot1.tsv" STEP-06; then
+	rows_before=$(( $( wc -l < "$OUT/annot1.tsv" ) - 1 ))
+	lz_step "-p ann1 --ann1 $T3_ANN1_ALT --append"
+	s07="$_XCUT"
+	rows_after=$(( $( wc -l < "$OUT/annot1.tsv" ) - 1 ))
+	if [ "$rows_after" -le "$rows_before" ]; then
+		s07="$s07\n  row count did not increase: $rows_before -> $rows_after"
+	fi
+	# Both engines must be represented, or --append silently replaced instead.
+	nsearch=$( awk -F'\t' 'NR>1 { print $1 }' "$OUT/annot1.tsv" | sort -u | grep -c . )
+	[ "$nsearch" -ge 2 ] || s07="$s07\n  only $nsearch distinct 'search' value(s) after --append; expected both engines"
+	report_step STEP-07 "round 1 --append: $rows_before -> $rows_after rows, $nsearch engines" "$s07"
+fi
+
+# ======================================= STEP-08 round 1, chained ============
+
+if need STEP-08 "round 1 chaining is disjoint" STEP-06; then
+	lz_step "-p ann1 --ann1 $T3_ANN1,$T3_ANN1_ALT"
+	s08="$_XCUT"
+	A1="$OUT/annot1.tsv"
+	if [ ! -s "$A1" ]; then
+		s08="$s08\n  missing annot1.tsv"
+	else
+		# A chain hands the second engine only what the first did not annotate,
+		# so the two contig sets must not overlap.
+		awk -F'\t' 'NR>1 { print $1"\t"$4 }' "$A1" | sort -u > "$WORK/chain.tsv"
+		eng1=$( awk -F'\t' 'NR>1 { print $1 }' "$A1" | sort -u | head -1 )
+		eng2=$( awk -F'\t' 'NR>1 { print $1 }' "$A1" | sort -u | sed -n 2p )
+		if [ -z "$eng2" ]; then
+			diag "  note: only engine '$eng1' produced hits, so the chain had nothing to hand on"
+		else
+			awk -F'\t' -v e="$eng1" '$1==e { print $2 }' "$WORK/chain.tsv" | sort -u > "$WORK/c1.txt"
+			awk -F'\t' -v e="$eng2" '$1==e { print $2 }' "$WORK/chain.tsv" | sort -u > "$WORK/c2.txt"
+			both=$( comm -12 "$WORK/c1.txt" "$WORK/c2.txt" | head -3 | tr '\n' ' ' )
+			[ -z "$both" ] || s08="$s08\n  contigs annotated by both $eng1 and $eng2: $both"
+		fi
+	fi
+	report_step STEP-08 "round 1 chaining: engines annotate disjoint contig sets" "$s08"
+fi
+
+# ======================================= STEP-09 annotation round 2 ==========
+
+if need STEP-09 "annotation round 2" STEP-05; then
+	lz_step "-p ann1,ann2 --ann1 $T3_ANN1 --ann2 $T3_ANN2"
+	s09="$_XCUT"
+	A2="$OUT/annot2.tsv"
+	if [ ! -s "$A2" ]; then
+		s09="$s09\n  missing or empty annot2.tsv"
+	else
+		# Round 2 re-searches a subset selected from round 1, so its contigs must
+		# be a subset of the round-1 contigs.
+		awk -F'\t' 'NR>1 { print $4 }' "$OUT/annot1.tsv" | sort -u > "$WORK/a1_ctg.txt"
+		awk -F'\t' 'NR>1 { print $4 }' "$A2"            | sort -u > "$WORK/a2_ctg.txt"
+		extra=$( comm -13 "$WORK/a1_ctg.txt" "$WORK/a2_ctg.txt" | head -3 | tr '\n' ' ' )
+		[ -z "$extra" ] || s09="$s09\n  round-2 contigs absent from round 1: $extra"
+	fi
+	report_step STEP-09 "annotation round 2: $( [ -s "$A2" ] && echo $(( $( wc -l < "$A2" ) - 1 )) || echo 0 ) rows" "$s09"
+fi
+
+# ======================================================= STEP-10 reports =====
+
+if need STEP-10 "reports are written" STEP-09; then
+	lz_step "-p rep"
+	s10="$_XCUT"
+	# taxprofile.txt is deliberately absent from this list — see STEP-10a.
+	for f in abund_table.tsv abund_table.xlsx annot_table.tsv annot_table.xlsx \
+	         reports/krona.report.html reports/krona.data.txt; do
+		[ -s "$OUT/$f" ] || s10="$s10\n  missing or empty $f"
+	done
+	[ -d "$OUT/contigs" ] || s10="$s10\n  missing contigs/ directory"
+
+	# §6 asks for a readn_pc column summing to ~100 %.  There is no such column:
+	# abund_table.tsv carries absolute readn, and readn_pc exists only inside
+	# R/NGSlib.R, which derives it for the plots.  Assert what the table has —
+	# reads are attributed, and never more than were assembled.
+	if [ -s "$OUT/abund_table.tsv" ]; then
+		col=$( head -1 "$OUT/abund_table.tsv" | tr '\t' '\n' | grep -nx readn | cut -d: -f1 )
+		if [ -z "$col" ]; then
+			s10="$s10\n  abund_table.tsv has no readn column"
+		else
+			sum=$( awk -F'\t' -v c="$col" 'NR>1 { s+=$c } END { printf "%d", s+0 }' "$OUT/abund_table.tsv" )
+			if [ "$sum" -le 0 ]; then
+				s10="$s10\n  abund_table.tsv attributes 0 reads"
+			elif [ "$sum" -gt "$(( TRIM_PAIRS * 2 ))" ]; then
+				s10="$s10\n  abund_table.tsv attributes $sum reads, more than the $(( TRIM_PAIRS * 2 )) that entered"
+			fi
+		fi
+	fi
+
+	# The annotation table is the file §6's column list actually describes.
+	if [ -s "$OUT/annot_table.tsv" ]; then
+		hdr=$( head -1 "$OUT/annot_table.tsv" )
+		for c in contig clen staxid sname division species genus family; do
+			printf '%s' "$hdr" | tr '\t' '\n' | grep -qx -- "$c" \
+				|| s10="$s10\n  annot_table.tsv has no '$c' column"
+		done
+	fi
+	report_step STEP-10 "reports: abundance and annotation tables, krona, contigs/" "$s10"
+fi
+
+# =============================================== STEP-10a taxprofile ========
+
+# The User Guide (Table of outputs) documents taxprofile.txt as a CAMI-format
+# profile, but the only line that would write it — the abundtable2taxprofile.pl
+# call at lazypipe.pl:1089 — is commented out, so the file is never produced.
+if need STEP-10a "taxprofile.txt is written" STEP-10; then
+	if [ -s "$OUT/taxprofile.txt" ]; then
+		pass STEP-10a "taxprofile.txt is written"
+		mark_ok STEP-10a
+	else
+		todof STEP-10a "taxprofile.txt is written" \
+			"known defect, docs/testing_roadmap.md §12 item 16" \
+			"the generator at lazypipe.pl:1089 is commented out, so the file is never produced" \
+			"the User Guide documents it as a pipeline output"
+	fi
+fi
+
+# ======================================= STEP-11 contig sorting =============
+
+if need STEP-11 "sorted contig sets partition contigs.fa" STEP-10; then
+	s11=""
+	: > "$WORK/sorted_all.txt"
+	present=0
+	for g in ab ph vi un; do
+		f="$OUT/contigs.ann1.$g.fa"
+		[ -e "$f" ] || continue
+		present=$(( present + 1 ))
+		grep '^>' "$f" 2>/dev/null | sed 's/^>//; s/[[:space:]].*//' >> "$WORK/sorted_all.txt"
+	done
+	if [ "$present" -eq 0 ]; then
+		s11="$s11\n  none of contigs.ann1.{ab,ph,vi,un}.fa exist"
+	else
+		sort "$WORK/sorted_all.txt" > "$WORK/sorted_sorted.txt"
+		sort -u "$WORK/sorted_all.txt" > "$WORK/sorted_uniq.txt"
+		dup=$( comm -23 "$WORK/sorted_sorted.txt" "$WORK/sorted_uniq.txt" | head -3 | tr '\n' ' ' )
+		[ -z "$dup" ] || s11="$s11\n  contigs appearing in more than one set: $dup"
+		grep '^>' "$OUT/contigs.fa" | sed 's/^>//; s/[[:space:]].*//' | sort -u > "$WORK/fa_all.txt"
+		lost=$( comm -23 "$WORK/fa_all.txt" "$WORK/sorted_uniq.txt" | head -3 | tr '\n' ' ' )
+		[ -z "$lost" ] || s11="$s11\n  contigs in contigs.fa missing from every set: $lost"
+		alien=$( comm -13 "$WORK/fa_all.txt" "$WORK/sorted_uniq.txt" | head -3 | tr '\n' ' ' )
+		[ -z "$alien" ] || s11="$s11\n  contigs in a set but not in contigs.fa: $alien"
+	fi
+	report_step STEP-11 "contig sorting: $present sets partition contigs.fa with no overlap or loss" "$s11"
+fi
+
+# ====================================== STEP-12 reference-genome reports =====
+
+if ! have create_report; then
+	skipt STEP-12 "reference-genome reports" "create_report (igv-reports) not on PATH"
+elif need STEP-12 "reference-genome reports" STEP-10; then
+	lz_step "-p rgrep"
+	s12="$_XCUT"
+	RG="$OUT/reports/refgen.report.html"
+	if [ ! -s "$RG" ]; then
+		s12="$s12\n  missing or empty reports/refgen.report.html"
+	elif ! grep -q 'data:' "$RG"; then
+		s12="$s12\n  refgen.report.html contains no embedded data: URI"
+	fi
+	report_step STEP-12 "reference-genome reports" "$s12"
+fi
+
+# ================================================ STEP-13 stats + QC =========
+
+if need STEP-13 "stats and QC plots" STEP-10; then
+	lz_step "-p sta"
+	s13="$_XCUT"
+	npng=0
+	# The pipeline writes plots under figures/ and reports/figures/ depending on
+	# the plot; take either.
+	for p in "$OUT"/figures/*.png "$OUT"/reports/figures/*.png; do
+		[ -e "$p" ] || continue
+		npng=$(( npng + 1 ))
+		[ -s "$p" ] || { s13="$s13\n  empty PNG: $( basename "$p" )"; continue; }
+		# PNG magic: \x89PNG
+		magic=$( head -c 4 "$p" | od -An -tx1 | tr -d ' \n' )
+		[ "$magic" = "89504e47" ] || s13="$s13\n  $( basename "$p" ) is not a PNG (magic $magic)"
+	done
+	[ "$npng" -gt 0 ] || s13="$s13\n  no PNG written to figures/"
+	report_step STEP-13 "stats and QC plots: $npng PNG(s)" "$s13"
+fi
+
+# ========================================================= STEP-14 pack ======
+
+if need STEP-14 "pack writes a tarball" STEP-10; then
+	lz_step "-p pack"
+	s14="$_XCUT"
+	TARB=$( ls -1 "$RES/$T3_SAMPLE".tar.gz "$OUT".tar.gz "$RES"/*.tar.gz 2>/dev/null | head -1 )
+	if [ -z "$TARB" ] || [ ! -s "$TARB" ]; then
+		s14="$s14\n  no tarball produced under $RES"
+	else
+		listing=$( tar -tzf "$TARB" 2>/dev/null )
+		printf '%s' "$listing" | grep -q 'reports/' || s14="$s14\n  tarball lists no reports/ entry"
+		printf '%s' "$listing" | grep -q 'abund_table' || s14="$s14\n  tarball lists no abundance table"
+	fi
+	report_step STEP-14 "pack: tarball lists reports/ and the abundance tables" "$s14"
+fi
+
+# ======================================================== STEP-15 clean ======
+
+if need STEP-15 "clean removes intermediates and keeps reports" STEP-14; then
+	lz_step "-p clean"
+	s15="$_XCUT"
+	# The reports must survive the clean.
+	for f in abund_table.tsv annot_table.tsv; do
+		[ -s "$OUT/$f" ] || s15="$s15\n  clean removed $f, which must survive"
+	done
+	# Intermediates that clean is expected to take away.
+	for f in contigs.bwa.sam contigs.fa.bwt; do
+		[ -e "$OUT/$f" ] && s15="$s15\n  intermediate still present after clean: $f"
+	done
+	report_step STEP-15 "clean: intermediates gone, reports intact" "$s15"
+fi
+
+# =============================================== STEP-16 read retrieval ======
+
+RR="$INSTALL/bin/retrieve_reads"
+if [ ! -x "$RR" ]; then
+	skipt STEP-16 "read retrieval with retrieve_reads" "bin/retrieve_reads not built"
+elif need STEP-16 "read retrieval with retrieve_reads" STEP-04; then
+	s16=""
+	# retrieve_reads reads only uncompressed fastq (§12 item 15), so decompress
+	# first exactly as the User Guide instructs.
+	gunzip -kf "$OUT"/reads/read1.trim.fq.gz "$OUT"/reads/read2.trim.fq.gz 2>/dev/null
+	TOPC=$( awk -F'\t' '{ print $2 }' "$OUT/readid_contigid.tsv" | sort | uniq -c | sort -rn | head -1 | awk '{print $2}' )
+	if [ -z "$TOPC" ]; then
+		s16="$s16\n  could not pick a contig from readid_contigid.tsv"
+	else
+		TEST_TIMEOUT="$T3_STEP_TIMEOUT" try_sh "'$RR' -r '$OUT' -c '$TOPC' -p t3probe"
+		[ "$_RC" -eq 0 ] || s16="$s16\n  retrieve_reads -c $TOPC exited $_RC"
+		got="$OUT/reads/t3probe_r1.fq"
+		if [ ! -s "$got" ]; then
+			s16="$s16\n  no reads written for contig $TOPC"
+		else
+			nret=$( nreads "$got" )
+			nexp=$( awk -F'\t' -v c="$TOPC" '$2==c { n++ } END { print n+0 }' "$OUT/readid_contigid.tsv" )
+			[ "$nret" -gt 0 ] || s16="$s16\n  retrieved 0 reads for $TOPC"
+			# Retrieved ids must be a subset of the library.
+			sed -n '1~4p' "$got" | sed 's/^@//; s#[/[:space:]].*##' | sort -u > "$WORK/got_ids.txt"
+			sed -n '1~4p' "$OUT/reads/read1.trim.fq" | sed 's/^@//; s#[/[:space:]].*##' | sort -u > "$WORK/lib_ids.txt"
+			alien=$( comm -13 "$WORK/lib_ids.txt" "$WORK/got_ids.txt" | head -3 | tr '\n' ' ' )
+			[ -z "$alien" ] || s16="$s16\n  retrieved read ids absent from the library: $alien"
+			diag "  retrieved $nret reads for contig $TOPC (map lists $nexp)"
+		fi
+	fi
+	report_step STEP-16 "read retrieval: reads for the top contig are a subset of the library" "$s16"
+fi
+
+# ------------------------------------------------------------------ done ---
+
+if [ -n "$STEP_TIMES" ]; then
+	diag "step wall time (recorded, never asserted on):"
+	diag "$( printf '%b' "$STEP_TIMES" )"
+	diag "  total in pipeline steps: ${TOTAL_SECS}s"
+fi
+
+if [ -n "$UNDEF_VARS" ]; then
+	diag "undefined environment variables seen during the run:$UNDEF_VARS"
+	diag "  \$TM is expected while --pre is fastp: config.yaml names it only in par_trimm"
+fi
+
+if [ -z "$TREE_BEFORE" ]; then
+	skipt STEP-99 "the tier wrote nothing into the repository working tree" "not a git checkout"
+else
+	TREE_AFTER=$( git -C "$REPO" status --porcelain 2>/dev/null )
+	if [ "$TREE_BEFORE" = "$TREE_AFTER" ]; then
+		pass STEP-99 "the tier wrote nothing into the repository working tree"
+	else
+		fail STEP-99 "the tier wrote nothing into the repository working tree" \
+			"$( diff <( printf '%s\n' "$TREE_BEFORE" ) <( printf '%s\n' "$TREE_AFTER" ) | head -10 )" \
+			"tests must write only under \$TMPDIR (docs/testing_roadmap.md §1)"
+	fi
+fi
+
+diag ""
+tap_done

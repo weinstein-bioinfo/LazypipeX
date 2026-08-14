@@ -1,36 +1,44 @@
+<a name="LazypipeUserGuide" id="LazypipeUserGuide"></a>
 ## Lazypipe User Guide
+<a name="RunningOnLinuxCluster" id="RunningOnLinuxCluster"></a>
 ### Running Lazypipe v3.1 on a Linux cluster
 
-### Table of Content
-- [Lazypipe User Guide](#lazypipe-user-guide)
-  - [Running Lazypipe v3.1 on a Linux cluster](#running-lazypipe-v31-on-a-linux-cluster)
-  - [Table of Content](#table-of-content)
-  - [About Lazypipe](#about-lazypipe)
-  - [Running Lazypipe on CSC](#running-lazypipe-on-csc)
-- [Installing Lazypipe](#installing-lazypipe)
-  - [Setting up directories](#setting-up-directories)
-  - [Cloning the repository](#cloning-the-repository)
-  - [Installing dependencies](#installing-dependencies)
-    - [Installing dependencies with Conda](#installing-dependencies-with-conda)
-    - [Installing dependencies manually](#installing-dependencies-manually)
-    - [Installing Perl modules](#installing-perl-modules)
-    - [Installing R libraries](#installing-r-libraries)
-    - [Installing Lazypipe databases](#installing-lazypipe-databases)
-    - [Installing custom reference databases](#installing-custom-reference-databases)
-    - [Installing host and background filters](#installing-host-and-background-filters)
-- [Running Lazypipe](#running-lazypipe)
-- [Annotation Stategies](#annotation-stategies)
-- [Example 1](#example-1)
-  - [Example 1: generated reports](#example-1-generated-reports)
-    - [Assembled contigs and predicted ORFs](#assembled-contigs-and-predicted-orfs)
-    - [Abundance tables](#abundance-tables)
-    - [Annotation tables](#annotation-tables)
-    - [Quality control plots](#quality-control-plots)
-  - [Retrieving reads for a contig or taxid](#retrieving-reads-for-a-contig-or-taxid)
-- [Command line options](#command-line-options)
-- [Additional options in `config.yaml`:](#additional-options-in-configyaml)
+Guide version: v3.1.1 · Edited: 2026-08-14
 
-<a id="About"></a>
+<a name="TableOfContent" id="TableOfContent"></a>
+### Table of Content
+- <a href="#LazypipeUserGuide">Lazypipe User Guide</a>
+  - <a href="#RunningOnLinuxCluster">Running Lazypipe v3.1 on a Linux cluster</a>
+  - <a href="#TableOfContent">Table of Content</a>
+  - <a href="#About">About Lazypipe</a>
+  - <a href="#RunningLazypipeOnCSC">Running Lazypipe on CSC</a>
+- <a href="#InstallingLazypipe">Installing Lazypipe</a>
+  - <a href="#SettingUpDirectories">Setting up directories</a>
+  - <a href="#CloningRepository">Cloning the repository</a>
+  - <a href="#InstallingDependencies">Installing dependencies</a>
+    - <a href="#InstallingDependenciesConda">Installing dependencies with Conda</a>
+    - <a href="#InstallingDependenciesManually">Installing dependencies manually</a>
+    - <a href="#InstallingPerlModules">Installing Perl modules</a>
+    - <a href="#InstallingRLibraries">Installing R libraries</a>
+    - <a href="#InstallingReferenceDatabases">Installing Lazypipe databases</a>
+    - <a href="#InstallingCustomDatabases">Installing custom reference databases</a>
+    - <a href="#InstallingHostFilters">Installing host and background filters</a>
+  - <a href="#TestingTheInstallation">Testing the installation</a>
+- <a href="#RunningLazypipe">Running Lazypipe</a>
+- <a href="#AnnotationStrategies">Annotation Stategies</a>
+- <a href="#Example1">Example 1</a>
+  - <a href="#Example1Reports">Example 1: generated reports</a>
+    - <a href="#AssembledContigsORFs">Assembled contigs and predicted ORFs</a>
+    - <a href="#AbundanceTables">Abundance tables</a>
+    - <a href="#AnnotationTables">Annotation tables</a>
+    - <a href="#QualityControlPlots">Quality control plots</a>
+  - <a href="#RetrievingReads">Retrieving reads for a contig or taxid</a>
+- <a href="#CommandLineOptions">Command line options</a>
+- <a href="#ConfigOptions">Additional options in <code>config.yaml</code></a>
+- <a href="#Citing">Citing LazypipeX</a>
+- <a href="#Contact">Contact</a>
+
+<a name="About" id="About"></a>
 ### About Lazypipe
 
 Lazypipe is a bioinformatic pipeline for analyzing virus and bacteria metagenomics from NGS data.
@@ -59,41 +67,47 @@ Lazypipe is a bioinformatic pipeline for analyzing virus and bacteria metagenomi
    * quality control plots
    * Integrative Genome Viewer reports for visualing placement of contigs relative to reference genomes
 
-<a id="RunningLazypipeOnCSC"></a>
+<a name="RunningLazypipeOnCSC" id="RunningLazypipeOnCSC"></a>
 ### Running Lazypipe on CSC
 
 Lazypipe can be quickly assessed using a [preinstalled module](https://docs.csc.fi/apps/lazypipe/) at the [Finnish Center of Scientific Computing](https://research.csc.fi/).
 
-<a id="InstallingLazypipe"></a>
+<a name="InstallingLazypipe" id="InstallingLazypipe"></a>
 ## Installing Lazypipe
 
-<a id="SettingUpDirectories"></a>
+<a name="SettingUpDirectories" id="SettingUpDirectories"></a>
 ### Setting up directories
 
 Create directories for storing reference databases, host/background filters, taxonomy and pipeline results (change `/my/data/path` according to your preferences):
 
     lazypipe_data=/my/data/path
     mydata=/my/data/path
-    mkdir -p $lazypipe_data/databases $lazypipe_data/hostgenomes $lazypipe_data/taxonomy
+    mkdir -p $lazypipe_data/databases $lazypipe_data/hostgenomes $lazypipe_data/taxonomy/ncbi
     mkdir -p $mydata/results
 
-Add environment variables that are used in the default `config.yaml`: `$databases`, `$hostgenomes`, `$taxonomy` and `$mydata`. To add environmen variables locate *.bashrc* file in your home directory and add these lines:
+Add environment variables that are used in the default `config.yaml`: `$databases`, `$hostgenomes`, `$taxonomy_ncbi` and `$mydata`. To add environmen variables locate *.bashrc* file in your home directory and add these lines:
 
     export databases=/my/data/path/databases
     export hostgenomes=/my/data/path/hostgenomes
-    export taxonomy=/my/data/path/taxonomy
+    export taxonomy_ncbi=/my/data/path/taxonomy/ncbi
     export mydata=/my/data/path
 
-<a id="CloningRepository"></a>
+The taxonomy variable names the **NCBI** taxonomy specifically, and its directory sits one
+level below a `taxonomy/` root, because the pipeline now reads more than one taxonomy —
+ICTV VMR tables alongside the NCBI dump, and SILVA for the rRNA databases. A single
+`$taxonomy` would not say which one is meant, so each has its own variable and its own
+subdirectory.
+
+<a name="CloningRepository" id="CloningRepository"></a>
 ### Cloning the repository ###
 
     git clone https://plyusnin@bitbucket.org/plyusnin/lazypipe.git
     cd lazypipe
 
-<a id="InstallingDependencies"></a>
+<a name="InstallingDependencies" id="InstallingDependencies"></a>
 ### Installing dependencies ###
 
-<a id="InstallingDependenciesConda"></a>
+<a name="InstallingDependenciesConda" id="InstallingDependenciesConda"></a>
 #### Installing dependencies with Conda
 
 
@@ -117,7 +131,7 @@ To activate all installed dependencies type:
 Set taxonomy database location for KronaGraph:
 
      rm -rf $CONDA_PREFIX/conda/env/lazypipe/opt/krona/taxonomy
-     ln -s $data/taxonomy $CONDA_PREFIX/conda/env/lazypipe/opt/krona/taxonomy
+     ln -s $taxonomy_ncbi $CONDA_PREFIX/conda/env/lazypipe/opt/krona/taxonomy
 
 Set env variable *$TM* to point to trimmomatic directory:
 
@@ -132,7 +146,7 @@ Download PANNZER (version 02/2022 or later) and set *runsanspanz.py* as executab
     chmod 755 SANSPANZ.3/runsanspanz.ex.py
     ln -sf $(pwd)/SANSPANZ.3/runsanspanz.ex.py ~/bin/runsanspanz.py
 
-<a id="InstallingDependenciesManually"></a>
+<a name="InstallingDependenciesManually" id="InstallingDependenciesManually"></a>
 #### Installing dependencies manually
 
 Download and unpack dependencies listed in Table 1.
@@ -166,7 +180,7 @@ Tools in square brackets are not required for basic Lazypipe runs. When installe
 Version constraints in parentheses are minimums: *Samtools* must be 1.12 or newer, as Lazypipe relies on filter expressions (`samtools view -e`) added in that release.
 
 
-<a id="InstallingPerlModules"></a>
+<a name="InstallingPerlModules" id="InstallingPerlModules"></a>
 #### Installing Perl modules
 
 Install modules to any path you have permissions to.
@@ -186,17 +200,17 @@ Open configuration file for terminal sessions (e.g. `$HOME/.bash_profile`, `$HOM
     export PERL5LIB=$HOME/perl5/lib/perl5:{$PERL5LIB}
 
 
-<a id="InstallingRLibraries"></a>
+<a name="InstallingRLibraries" id="InstallingRLibraries"></a>
 #### Installing R libraries
 
 Open R console and type
 
     install.packages( c("reshape","openxlsx", "ggplot2","cowplot") );
 
-<a id="InstallingReferenceDatabases"></a>
+<a name="InstallingReferenceDatabases" id="InstallingReferenceDatabases"></a>
 #### Installing Lazypipe databases
 
-Install *NCBI Taxonomy* using the following call. This will install to the default path set in `$taxonomy` environment variable.
+Install *NCBI Taxonomy* using the following call. This will install to the default path set in `$taxonomy_ncbi` environment variable.
 
     perl perl/install_db.pl --db taxonomy -v
 
@@ -216,8 +230,8 @@ For example, use the following calls to install default databases. This will ins
     perl perl/install_db.pl --db blastn.nt.vi -v
     perl perl/install_db.pl --db blastp.uniref100.abv -v
     perl perl/install_db.pl --db blastp.uniref100.vi -v
-    perl perl/install_db.pl --db diamond.uniref100.abv -v
-    perl perl/install_db.pl --db diamond.uniref100.vi -v
+    perl perl/install_db.pl --db diamondp.uniref100.abv -v
+    perl perl/install_db.pl --db diamondp.uniref100.vi -v
     perl perl/install_db.pl --db hmmscan.pfam.vi -v
     perl perl/install_db.pl --db hmmscan.rdrp -v
 
@@ -256,6 +270,7 @@ For example, use the following calls to install default databases. This will ins
 **Table 4:** Lazypipe RefSeq databases
 
 
+<a name="InstallingCustomDatabases" id="InstallingCustomDatabases"></a>
 #### Installing custom reference databases
 
 To install a custom reference database open `config.yaml` and create a new entry under the `ann.databases` section. The entry MUST be in the following format:
@@ -270,6 +285,7 @@ For *Minimap2* databases you can use both `*.fasta` and `*.mmi` files; note that
 
 Once defined in the `config.yaml` the new database can be used in pipeline annotations. E.g. `-p ann1 --ann1 database_name`.
 
+<a name="InstallingHostFilters" id="InstallingHostFilters"></a>
 #### Installing host and background filters
 
 To list available background filters type:
@@ -286,11 +302,37 @@ Or all available host filters with one call:
 
 Host filters will be installed to path set in `$hostgenomes` environment variable.
 
+<a name="TestingTheInstallation" id="TestingTheInstallation"></a>
+### Testing the installation
 
-<a id="RunningLazypipe"></a>
+Verify the installation with the bundled test suite:
+
+    make test           # tiers 0-1: no databases needed, ~30 s
+    make test-all       # all tiers, ~25 min
+
+Or run tiers individually for more control:
+
+    tests/run_tests.sh --list        # what each tier covers and costs
+    tests/run_tests.sh --tier 0,1,2
+
+| Tier | Covers | Needs databases |
+|:--|:--|:--|
+| 0 | environment variables, tools, Perl/R libraries, compiled helpers | no |
+| 1 | manuals, argument parsing, library unit tests | no |
+| 2 | installed databases: indices open, resolve taxids, answer queries | yes |
+| 3 | each pipeline step separately on the bundled sample library | yes |
+| 4 | full `main` run, and the viruses it is expected to find | yes |
+
+Each tier prints [TAP](https://testanything.org/) and exits with its number of failed tests, so
+`make test; echo $?` is enough for a scripted check. A `# SKIP` marks a check that does not apply
+to this installation — an absent optional tool, for instance — and is not a failure. Run tiers 0-1
+after any code change, and tier 2 after every database update.
+
+
+<a name="RunningLazypipe" id="RunningLazypipe"></a>
 ## Running Lazypipe
 
-<a id="AnnotationStrategies"></a>
+<a name="AnnotationStrategies" id="AnnotationStrategies"></a>
 ## Annotation Stategies
 
 Lazypipe3 introduces the consept of annotation strategies, or using different presets of homology search engines and reference databases to annotate your metagenomic data. Based on our benchmarking (manuscript in preparation) we can suggest general guidelines for selecting Lazypipe strategies for different use cases (Table 5).
@@ -311,36 +353,36 @@ Predifined strategies are listed in `config.yaml` in section `ann.strategies`. T
 	<td>Illumina libraries</td>
 	<td><em>Fast preliminary analysis for viruses</em></td>
 	<td><em>refseq.vi</em></td>
-	<td><em>lazypipe.pl -p main --flt Homo_sapiens --anns refseq.vi</em></td>
+	<td><em>lazypipe.pl -p main --hostgen Homo_sapiens --anns vi.refseq</em></td>
 	<td>Filter background and annotate in two rounds</em>. 1st round: identify candidates for viruses with <em>Minimap2</em> against <em>RefSeq<sub>Viruses</sub></em>. 2nd round: re-annotate viral candidates with <em>BLASTN</em> against <em>RefSeq<sub>Archaea-Bacteria-Viruses</sub></em> </td></tr>
 <tr>
 	<td rowspan="4" >Illumina libraries from tissue samples and other samples with clearly defined eukaryotic background</td>
 	<td><em>Virus identification excluding retroviruses</em>. BLASTN accuracy with up to 30X speedup compared to BLASTN on complete NT.</td>
 	<td><em>nt.vi</em></td>
-	<td><em>lazypipe.pl -p main --flt Homo_sapiens --anns nt.vi</em></td>
+	<td><em>lazypipe.pl -p main --hostgen Homo_sapiens --anns vi.nt</em></td>
 	<td>Filter background and annotate in two rounds</em>. 1st round: identify candidates for viruses with <em>Minimap2</em> against <em>NT<sub>Viruses</sub></em>. 2nd round: re-annotate viral candidates with <em>BLASTN</em> against <em>NT<sub>Archaea-Bacteria-Viruses</sub></em> </td></tr>
 <tr>
 	<td><em>Virus identification including retroviruses</em>. BLASTN accuracy with up to 8X speedup compared to BLASTN.</td>
 	<td><em>nt.vi.env</em></td>
-	<td><i>lazypipe.pl -p main --anns nt.vi.env</i></td>
+	<td><i>lazypipe.pl -p main --anns vi.nt.env</i></td>
 	<td>Annotate in two rounds. 1st round: identify candidates for viruses with <em>Minimap2</em> against <em>NT<sub>Viruses</sub></em>. 2nd round: re-annotate viral candidates with <em>BLASTN</em> against <em>complete NT</em></td></tr>
 
 <tr><td><em>Virus discovery excluding retroviruses</em>. Precision/recall at ~100%/100% of combined BLASTN/BLASTP with up to 5X speedup.</td>
 	<td><em>vi.chain1</em></td>
-	<td><i>lazypipe.pl -p main --flt Homo_sapiens --anns vi.chain1</i></td>
+	<td><i>lazypipe.pl -p main --hostgen Homo_sapiens --anns vi.chain1</i></td>
 	<td>Filter background, chain Minimap2 to BLASTN/BLASTP. Contigs are annotated with <em>Minimap2</em> against <em>NT<sub>Archaea-Bacteria-Viruses</sub></em>, then contigs with no hits with <em>BLASTN</em> against <em>NT<sub>ABV</sub></em>, then contigs with no hits with <em>BLASTP</em> against <em>UniRef100<sub>Archaea-Bacteria-Viruses</sub></em>.</td>
 </tr>
 <tr>
 	<td><em>Virus discovery excluding retroviruses</em>. Precision/recall at ~100%/99% of combined BLASTN and BLASTP with up to 20X speedup.</td>
 	<td><em>vi.chain3</em></td>
-	<td><i>lazypipe.pl -p main --flt Homo_sapiens --anns vi.chain3</i></td>
+	<td><i>lazypipe.pl -p main --hostgen Homo_sapiens --anns vi.chain3</i></td>
 	<td>Filter background, chain Minimap2 to DIAMOND blastp. Contigs are annotated with <em>Minimap2</em> against <em>NT<sub>Archaea-Bacteria-Viruses</sub></em>, then contigs with no hits with <em>DIAMOND blastp</em> against <em>UniRef100<sub>Archaea-Bacteria-Viruses</sub></em>.</td>
 </tr>
 <tr>
 	<td rowspan="2">Illumina libraries from environmenal, fecal and other samples with complex eukaryotic backgrounds</td>
 	<td><em>Virus identification including retroviruses</em>. BLASTN accuracy with up to 8X speedup compared to BLASTN.</td>
 	<td><em>nt.vi.env</em></td>
-	<td><i>lazypipe.pl -p main --anns nt.vi.env</i></td>
+	<td><i>lazypipe.pl -p main --anns vi.nt.env</i></td>
 	<td>Annotate in tro rounds. 1st round: identify candidates for viruses with <em>Minimap2</em> against <em>NT<sub>Viruses</sub></em>. 2nd round: re-annotate viral candidates with <em>BLASTN</em> against <em>complete NT</em></td>
 </tr>
 <tr>
@@ -369,13 +411,13 @@ Predifined strategies are listed in `config.yaml` in section `ann.strategies`. T
         <td rowspan="2">20,715,500</td>
         <td rowspan="2">1,105,831</td>
         <td rowspan="2">contigs: 159,252<br>N50: 558</td>
-        <td>--flt Homo_sapiens<br>--anns nt.vi</td>
+        <td>--hostgen Homo_sapiens<br>--anns vi.nt</td>
         <td>30</td>
         <td>20,827</td>
         <td>3:53:04</td>
     </tr>
     <tr>
-        <td>--flt Homo_sapiens<br>--anns refseq.vi</td>
+        <td>--hostgen Homo_sapiens<br>--anns vi.refseq</td>
         <td>30</td>
         <td>10,066</td>
         <td>0:45:51</td>
@@ -384,7 +426,7 @@ Predifined strategies are listed in `config.yaml` in section `ann.strategies`. T
         <td>20,715,500</td>
         <td>20,699,199</td>
         <td>NA</td>
-        <td>--anns nt.vi.env</td>
+        <td>--anns vi.nt.env</td>
         <td>30</td>
         <td>110,985</td>
         <td>1-03:09:17</td>
@@ -394,13 +436,13 @@ Predifined strategies are listed in `config.yaml` in section `ann.strategies`. T
         <td rowspan="2">1,255,699</td>
         <td rowspan="2">1,066,490</td>
         <td rowspan="2">contigs: 4,733<br>N50: 433</td>
-        <td>--flt Aedes_aegypti,Aedes_albopictus..<br>--anns vi.chain1</td>
+        <td>--hostgen Aedes_aegypti,Aedes_albopictus..<br>--anns vi.chain1</td>
         <td>30</td>
         <td>24,705</td>
         <td>1-20:09:01</td>
     </tr>
     <tr>
-        <td>--flt Aedes_aegypti,Aedes_albopictus..<br>--anns vi.chain3</td>
+        <td>--hostgen Aedes_aegypti,Aedes_albopictus..<br>--anns vi.chain3</td>
         <td>30</td>
         <td>29,291</td>
         <td>1:30:49</td>
@@ -428,7 +470,7 @@ Predifined strategies are listed in `config.yaml` in section `ann.strategies`. T
 
 **Table 6** Example cases with execution times
 
-<a id="Example1"></a>
+<a name="Example1" id="Example1"></a>
 ## Example 1
 
 In this example we will use a sample PE library that is included with the repository (`data/M15small_R*.fastq`). For this toy example we will use *RefSeq* databases (*Table 3*).
@@ -472,17 +514,18 @@ Generate assembly stats, pack for sharing and remove temporary files:
 
 For convenience, routine analysis steps (`pre,flt,ass,rea,ann1,ann2,rep,sta,pack,clean`) can be called with `main` tag. To run main analysis with `refseq.vi` annotation strategy type:
 
-    perl lazypipe.pl -1 data/samples/M15small_R1.fastq -p main --anns refseq.vi -t 8 -v
+    perl lazypipe.pl -1 data/samples/M15small_R1.fastq -p main --anns vi.refseq -t 8 -v
 
 
 
-<a id="Example1Reports"></a>
+<a name="Example1Reports" id="Example1Reports"></a>
 ### Example 1: generated reports
 
 Results are output to `$res/$sample`. Default value for `$res` is set in `config.yaml` and default value for `$sample` is created from the name of the input reads. These can be changed during runtime with `--res mydir --sample mysample`.
 
 In example 1 results were output to `$data/results/M15small`.
 
+<a name="AssembledContigsORFs" id="AssembledContigsORFs"></a>
 #### Assembled contigs and predicted ORFs
 
 | File or Directory | Description            |
@@ -508,7 +551,7 @@ In example 1 results were output to `$data/results/M15small`.
 
 **Table 7:** Lazypipe results: contigs and ORFs.
 
-<a id="AbundanceTables"></a>
+<a name="AbundanceTables" id="AbundanceTables"></a>
 #### Abundance tables
 ![abund_table.xlsx](img/abund_table.png)
 **Figure 2.** *abund_table.xlsx* for M15 sample results.
@@ -533,7 +576,7 @@ For raw abundance data see `abund_table.tsv`.
 
 **Table 8:** Columns in `abund_table.xlsx`
 
-<a id="AnnotationTables"></a>
+<a name="AnnotationTables" id="AnnotationTables"></a>
 #### Annotation tables
 ![annot_table.xslx](img/annot_table.png)
 **Figure 3.** *annot_table.xslx*
@@ -575,7 +618,7 @@ For raw annotation data see `contigs_annot.tsv`.
 
 **Table 9:** Columns in `contigs_annot.xslx`
 
-<a id="QualityControlPlots"></a>
+<a name="QualityControlPlots" id="QualityControlPlots"></a>
 #### Quality control plots
 
 ![Read length historgram](img/read.hist.png)
@@ -593,7 +636,7 @@ Quality Control (QC) plots include length histograms for reads and contigs.
 
 **Table 10:** Quality Control plots
 
-<a id="RetrievingReads"></a>
+<a name="RetrievingReads" id="RetrievingReads"></a>
 ### Retrieving reads for a contig or taxid
 
 Start by unzipping your source fasta:
@@ -613,7 +656,7 @@ To retrieve all reads mapped to staxid 1239574 (*Mamastrovirus*) type:
     bin/retrieve_reads -r results/M15small -v -t 1239574
 
 
-<a id="CommandLineOptions"></a>
+<a name="CommandLineOptions" id="CommandLineOptions"></a>
 ## Command line options
 
 
@@ -666,7 +709,7 @@ To retrieve all reads mapped to staxid 1239574 (*Mamastrovirus*) type:
 Default options and additional settings are defined in `config.yaml` file.
 Note that command line options take precedence over options in `config.yaml` file.
 
-<a id="ConfigOptions"></a>
+<a name="ConfigOptions" id="ConfigOptions"></a>
 ## Additional options in `config.yaml`:
 
 | Option             | Value              | Description
@@ -706,7 +749,7 @@ Note that command line options take precedence over options in `config.yaml` fil
 **Table 12:** Default options in in `config.yaml`
 
 
-<a id="Citing"></a>
+<a name="Citing" id="Citing"></a>
 **Citing LazypipeX**
 
 1. Ilya Weinstein, Olli Vapalahti, Ravi Kant, Teemu Smura. LazypipeX: Customizable Virome Analysis Pipeline Enabling Fast and Sensitive Virus Discovery from NGS data. bioRxiv (2025). https://doi.org/10.1101/2025.04.29.651217 (Preprint; under review at npj Viruses.)
@@ -717,7 +760,7 @@ Earlier versions:
 
 1. Ilya Plyusnin, Ravi Kant, Anne J. Jaaskelainen, Tarja Sironen, Liisa Holm, Olli Vapalahti, Teemu Smura. (2020) Novel NGS Pipeline for Virus Discovery from a Wide Spectrum of Hosts and Sample Types. Virus Evolution, veaa091, https://doi.org/10.1093/ve/veaa091
 
-<a id="Contact"></a>
+<a name="Contact" id="Contact"></a>
 **Contact**
 
 Project website: https://www.helsinki.fi/en/projects/lazypipe

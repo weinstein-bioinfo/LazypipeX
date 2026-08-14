@@ -122,6 +122,10 @@ if($dbname eq 'taxonomy'){
 
 
 print STDERR "\n--db $dbname did not match any database in $config\n";
+# Every match above exits 0; falling through to here means nothing was installed,
+# so the status must say so.  Without it a scripted install loop cannot tell a
+# mistyped key from a completed download and silently installs nothing.
+exit 1;
 
 
 
