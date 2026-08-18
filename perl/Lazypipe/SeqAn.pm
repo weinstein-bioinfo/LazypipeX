@@ -1033,7 +1033,11 @@ sub annotate_sans{
 	my $orf_finder		= defined($args{orf_finder}) ? $args{orf_finder}: "mga";
 	my $min_orf_length	= defined($args{min_orf_length}) ? $args{min_orf_length} : 72;
 	my $retain_ties		= defined($args{retain_ties})? $args{retain_ties} : 1;
-	
+	# The SANSPANZ driver is named differently per site: upstream installs it as
+	# runsanspanz.py, while a venv install may wrap it under another name (see
+	# config.yaml:call_sans).  Defaults to upstream's name when not supplied.
+	my $call_sans		= defined($args{call_sans}) && $args{call_sans} ne "" ? $args{call_sans} : "runsanspanz.py";
+
 	my $sans_params		= "-m SANStopHtaxid --SANS_H 5 -R ";
 	my $search_name		= "SANSparallel";
 	my $searchdb_name	= "UniProtKB";
@@ -1067,7 +1071,7 @@ sub annotate_sans{
 	detect_orfs(seqs=>$seqs, orfs_nt=>$orfs_nt, orfs_aa=>$orfs_aa, orf_finder=>$orf_finder, min_orf_length=>$min_orf_length, numth=>$numth);
 	
 	# run sans
-	system_call("runsanspanz.py $sans_params -i $orfs_aa -o $dbhits &> $log" );
+	system_call("$call_sans $sans_params -i $orfs_aa -o $dbhits &> $log" );
 	if( nlines("$dbhits") < 2){
 		print STDERR "\n\tSANSparallel: NO HITS FOR $seqs\n\n";
 		return();

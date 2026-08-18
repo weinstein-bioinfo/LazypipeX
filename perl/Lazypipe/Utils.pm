@@ -463,20 +463,10 @@ sub format_int{
 	return($e);
 }
 
-# Encode file as a binary-base64 BLOB competible with IGV. File can be ASCII/UTF-8/binary.
-# 
-# From IGV documentation data-uri format:
-# 	data:application/gzip;base64,<uuencoded string>
-# DEPENDENCIES: igv_reports/create_datauri python script
-#
-# USAGE: file2uri_igvreports($file)
-#
-sub file2uri_igvreports{
-	my $data_file	= shift;
-	my $uri 	= `create_datauri $data_file`;
-	chomp($uri);
-	return $uri;
-}
+# Removed: file2uri_igvreports(), which shelled out to igv-reports' create_datauri.
+# Nothing called it — generate_igv_html() in lazypipe.pl uses filebin2uri() below —
+# but its presence made igv-reports look like a dependency of -p rgreport, which
+# it never was.  The real external requirement there is the NCBI datasets CLI.
 
 # Encode base64-encoded uri compatible with IGV. Assumes input file is binary.
 # 

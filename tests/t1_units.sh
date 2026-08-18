@@ -53,7 +53,15 @@ cd "$INSTALL" || exit 99
 TMPD="$WORK/tmp"
 mkdir -p "$TMPD"
 
-have() { command -v "$1" >/dev/null 2>&1; }
+# A tool counts as available only if it is also executable.  `command -v`
+# alone is not enough: bash returns the path of a non-executable file found
+# on PATH, so a downloaded-but-not-chmod+x binary was reported as installed
+# and then failed at run time with "Permission denied".
+have() {
+	local p
+	p=$( type -P "$1" 2>/dev/null ) || return 1
+	[ -n "$p" ] && [ -x "$p" ]
+}
 
 # Snapshot for UNIT-99: whatever the working tree looks like before any test
 # runs is the baseline this tier must leave untouched.

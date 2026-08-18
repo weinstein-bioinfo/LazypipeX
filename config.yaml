@@ -4,6 +4,8 @@
 # GENERAL PARAMETERS
 general.parameters:
    call_R:                   "Rscript --no-save"
+   call_sans:                "sanspanz"   # SANSPANZ driver. Upstream ships it as runsanspanz.py;
+                                          # here it is a venv wrapper in $projappl/bin. Used by --ann1 sans
    min_read2hostgen_score:   100     # minimum alignment score for read mapping to hostgen
    min_read2hostgen_mapq:    0
    min_contig2hostgen_score: 300     # minimum alignment score for contig mapping to hostgen
@@ -45,7 +47,12 @@ hostgen_taxid:      0
 logs:               "logs"           # logs directory
 res:                "$data/results"  # results directory
 #tmpdir:             "$data/wrkdir"
-tmpdir:             $LOCAL_SCRATCH/wrkdir
+   # $TMPDIR is node-local disk on most clusters, and is set on Roihu login and
+   # compute nodes alike. Was $LOCAL_SCRATCH, which is a retired Puhti/Mahti
+   # variable, unset on Roihu and on non-CSC sites.
+   # NOTE: on Roihu's shared partitions (small, interactive, test) the local disk
+   # is only 20 GiB; for large libraries use medium/large or pass --tmpdir.
+tmpdir:             $TMPDIR/wrkdir
 tmpdir_keep:        0
    # parameters
 pipe:               "main"
@@ -90,7 +97,7 @@ ann.databases:
       db:      "$databases/core_nt.2026_07_18/core_nt"
       name:    "core_nt.2026_07_18"
       search:  "blastn"
-      url:     "NA"
+      url:     "https://a3s.fi/lazypipe-db/2026/blastn.core_nt.2026_07_18.tar.gz"
    blastn.core_nt.abv:
       db:      "$databases/core_nt.2026_07_18/blastn.core_nt.abv"
       name:    "core_nt.abv.2026_07_18"
@@ -128,14 +135,9 @@ ann.databases:
       url:    "https://a3s.fi/lazypipe-db/2026/blastn.refseq.vi.236.tar.gz"
 
    # --- nt (2025_01_12) — FROZEN ---------------------------------------------
-   # Retained as the record of what the published benchmarks used (§4.1).
-   minimap.nt:
-      db:      "$databases/nt.2025_01_12.fa"
-      name:    "nt.2025_01_12.fa"
-      search:  "minimap"
-      url:     "NA"
+   # Retained as the record of what the published benchmarks used.
    minimap.nt.abv:
-      db:      "$databases/nt.abv.2025_01_12.fa"
+      db:      "$databases/nt.2025_01_12/nt.abv.2025_01_12.fa"
       name:    "nt.abv.2025_01_12"
       search:  "minimap"
       url:     "https://a3s.fi/lazypipe-db/minimap.nt.abv.2025_01_12.tar.gz"
@@ -144,18 +146,13 @@ ann.databases:
       name:    "nt.vi.2025_01_12"
       search:  "minimap"
       url:     "https://a3s.fi/lazypipe-db/minimap.nt.vi.2025_01_12.tar.gz"
-   blastn.nt:
-      db:     "$databases/blast/2025_01_12/nt"
-      name:   "nt.2025_01_12"
-      search: "blastn"
-      url:    "NA"
    blastn.nt.abv:
-      db:     "$databases/blastn.nt.abv.2025_01_12"
+      db:     "$databases/nt.2025_01_12/blastn.nt.abv.2025_01_12"
       name:   "nt.abv.2025_01_12"
       search: "blastn"
       url:    "https://a3s.fi/lazypipe-db/blastn.nt.abv.2025_01_12.tar.gz"
    blastn.nt.vi:
-      db:     "$databases/blastn.nt.vi.2025_01_12"
+      db:     "$databases/nt.2025_01_12/blastn.nt.vi.2025_01_12"
       name:   "nt.vi.2025_01_12"
       search: "blastn"
       url:    "https://a3s.fi/lazypipe-db/blastn.nt.vi.2025_01_12.tar.gz"
@@ -242,26 +239,52 @@ ann.databases:
 
 
 # ANNOTATION STRATEGIES: call with --anns strategy
+# ANNOTATION STRATEGIES — ROIHU DEPLOYMENT
+#
+# This file is the deployment config for Roihu / the LazypipeDB dataset project.
+# It lists ONLY strategies whose databases are installed here.  The published
+# benchmarks are reproduced by LazypipeX/config.yaml, which keeps the nt.*-based
+# strategy set; the two files diverge BY DESIGN.
+#
+# Naming:
+#   <source>.<taxon>   two rounds — Minimap2 vs the vi subset to find candidates,
+#                      then BLASTN vs abv to re-annotate them
+#   .env               round 2 (or a chain's mapping step) runs against the
+#                      COMPLETE database instead of the abv subset — for
+#                      environmental/faecal samples and to catch retroviruses
+#   .fast              round 1 only
+#   vi.chainN          one round, chained annotators; contigs left unannotated
+#                      by one step pass to the next
+#
+# NOTE: vi.chain1-4 keep their published names but resolve to core_nt here,
+# whereas the published config resolves them to nt.  Results are therefore NOT
+# comparable across the two configs by strategy name alone — the versioned
+# `name:` field of each database (e.g. core_nt.abv.2026_07_18) is what records
+# which data a run actually used.
 ann.strategies:
-    # virus only:
-    vi.nt:             "--ann1 minimap.nt.vi --ann2 vi:blastn.nt.abv"
-    vi.nt.env:         "--ann1 minimap.nt.vi --ann2 vi:blastn.nt"
-    vi.nt.fast:        "--ann1 minimap.nt.vi"
-    vi.extend:         "--ann1 minimap.nt.vi,sans --ann2 vi:blastn.nt.abv,vi:blastp.uniref100.abv"
-    vi.refseq:         "--ann1 minimap.refseq.vi --ann2 vi:blastn.refseq.abv"
-    vi.refseq.fast:    "--ann1 minimap.refseq.vi"
-    vi.chain1:         "--ann1 minimap.nt.abv,blastn.nt.abv,blastp.uniref100.abv"
-    vi.chain2:         "--ann1 minimap.nt.abv,blastp.uniref100.abv"
-    vi.chain3:         "--ann1 minimap.nt.abv,diamondp.uniref100.abv"
-    vi.chain4:         "--ann1 minimap.nt.abv,sans"
-    vi.chain1.env:     "--ann1 minimap.nt,blastn.nt.abv,blastp.uniref100.abv"
-    vi.chain3.env:     "--ann1 minimap.nt,diamondp.uniref100.abv"
-    chain1.env:    "--ann1 minimap.nt,blastn.nt.abv,blastp.uniref100.abv"
-    chain3.env:    "--ann1 minimap.nt,diamondp.uniref100.abv"
-    # archaea+bacteria+viruses
-    abv.nt:            "--ann1 minimap.nt.abv --ann2 vi:blastn.nt.abv,ab:blastn.nt.abv"
-    abv.nt.fast:       "--ann1 minimap.nt.abv"
-    abv.extend:        "--ann1 minimap.nt.abv,sans --ann2 vi:blastn.nt.abv,ab:blastn.nt.abv,vi:blastp.uniref100.abv,ab:blastp.uniref100.abv"
+    # --- core_nt: the NT replacement; all six databases installed ----------
+    corent.vi:         "--ann1 minimap.core_nt.vi  --ann2 vi:blastn.core_nt.abv"
+    corent.vi.env:     "--ann1 minimap.core_nt.vi  --ann2 vi:blastn.core_nt"
+    corent.vi.fast:    "--ann1 minimap.core_nt.vi"
+    corent.abv:        "--ann1 minimap.core_nt.abv --ann2 vi:blastn.core_nt.abv,ab:blastn.core_nt.abv"
+    corent.abv.env:    "--ann1 minimap.core_nt.abv --ann2 vi:blastn.core_nt,ab:blastn.core_nt"
+    corent.abv.fast:   "--ann1 minimap.core_nt.abv"
+
+    # --- RefSeq (release 236) ---------------------------------------------
+    refseq.vi:         "--ann1 minimap.refseq.vi  --ann2 vi:blastn.refseq.abv"
+    refseq.vi.fast:    "--ann1 minimap.refseq.vi"
+    refseq.abv:        "--ann1 minimap.refseq.abv --ann2 vi:blastn.refseq.abv,ab:blastn.refseq.abv"
+
+    # --- nt: only minimap.nt.vi is installed on Roihu ----------------------
+    nt.vi.fast:        "--ann1 minimap.nt.vi"
+
+    # --- chained: published names, core_nt databases -----------------------
+    vi.chain1:         "--ann1 minimap.core_nt.abv,blastn.core_nt.abv,blastp.uniref100.abv"
+    vi.chain2:         "--ann1 minimap.core_nt.abv,blastp.uniref100.abv"
+    vi.chain3:         "--ann1 minimap.core_nt.abv,diamondp.uniref100.abv"
+    vi.chain1.env:     "--ann1 minimap.core_nt,blastn.core_nt.abv,blastp.uniref100.abv"
+    vi.chain2.env:     "--ann1 minimap.core_nt,blastp.uniref100.abv"
+    vi.chain3.env:     "--ann1 minimap.core_nt,diamondp.uniref100.abv"
 
 # GENOMES FOR HOST/CONTAMINATION FILTERING
 host.databases:
@@ -453,6 +476,11 @@ taxonomy:
 
 
 ICTV.VMR:
-   db:            "/scratch/project_2003755/taxonomy/ICTV/VMR_MSL40.v1.20250307.tsv"
-   name:          "ICTV VMR tables"
-   url:           "https://ictv.global/sites/default/files/VMR/VMR_MSL40.v1.20250307.xlsx"
+   # Tab-separated export of the ICTV Virus Metadata Resource spreadsheet.
+   # lazypipe.pl cuts these columns by name: 'Isolate ID', Species, Genus,
+   # Family, Order, Genome, 'Host source', and derives Isolate.NID from
+   # 'Isolate ID' with ^VMR([0-9]+) — so the header row and the VMR<digits>
+   # identifier format are both required.
+   db:            "$databases/taxonomy/ICTV/VMR_MSL40.v2.20260223.tsv"
+   name:          "ICTV VMR MSL40.v2"
+   url:           "https://ictv.global/sites/default/files/VMR/VMR_MSL40.v2.20260223.xlsx"

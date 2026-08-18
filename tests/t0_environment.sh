@@ -89,7 +89,15 @@ nearest_existing() {
 	printf '%s' "$p"
 }
 
-have() { command -v "$1" >/dev/null 2>&1; }
+# A tool counts as available only if it is also executable.  `command -v`
+# alone is not enough: bash returns the path of a non-executable file found
+# on PATH, so a downloaded-but-not-chmod+x binary was reported as installed
+# and then failed at run time with "Permission denied".
+have() {
+	local p
+	p=$( type -P "$1" 2>/dev/null ) || return 1
+	[ -n "$p" ] && [ -x "$p" ]
+}
 
 # ----------------------------------------------------------------- report ---
 
@@ -299,10 +307,31 @@ fi
 # Required for a default `-p main` run (fastp preprocessing, bwa filtering,
 # megahit assembly, minimap annotation, mga ORFs, krona report).
 TOOLS_REQUIRED="perl fastp bwa samtools seqkit csvtk taxonkit megahit minimap2 mga ktImportText pigz wget tar"
-# Needed only when a non-default option is chosen.
-TOOLS_OPTIONAL="spades.py:--ass spades  trimmomatic:--pre trimm  java:--pre trimm  prodigal:--gen prod  orfipy:ORF prediction alternative"
-# Needed only by particular annotation strategies / pipeline steps.
-TOOLS_FEATURE="blastn:BLASTN strategies  blastp:BLASTP strategies  blastx:BLASTX strategies  blastdbcmd:database checks (Tier 2)  diamond:vi.chain3 strategies  hmmscan:HMM strategies  runsanspanz.py:SANS strategies  create_report:--pipe rgrep (igv-reports)"
+# Needed only when a non-default option is chosen.  One "tool:reason" per line.
+TOOLS_OPTIONAL="spades.py:--ass spades
+trimmomatic:--pre trimm
+java:--pre trimm
+prodigal:--gen prod
+orfipy:alternative ORF prediction"
+# Needed only by particular annotation strategies / pipeline steps.  The SANS
+# entry follows config.yaml's call_sans, because the SANSPANZ driver is installed
+# under a site-specific name (here a venv wrapper called sanspanz) rather than
+# upstream's runsanspanz.py.
+CALL_SANS=$( perl -MYAML::Tiny -e '
+	my $y = eval { YAML::Tiny->read($ARGV[0]) } or exit 0;
+	my $c = $y->[0]{"general.parameters"}{call_sans} // "runsanspanz.py";
+	$c =~ s/\s.*//;			# the bare command, without its arguments
+	print $c;' "$CONFIG" 2>/dev/null )
+CALL_SANS=${CALL_SANS:-runsanspanz.py}
+TOOLS_FEATURE="blastn:BLASTN strategies
+blastp:BLASTP strategies
+blastx:BLASTX strategies
+blastdbcmd:database checks (Tier 2)
+diamond:vi.chain3 strategies
+hmmscan:HMM strategies
+$CALL_SANS:SANS strategies (config.yaml call_sans)
+datasets:--pipe rgreport (NCBI datasets CLI)
+dataformat:--pipe rgreport (NCBI datasets CLI)"
 
 env08_missing=""
 for t in $TOOLS_REQUIRED; do
@@ -320,21 +349,28 @@ else
 		"a default '-p main' run will fail at the step that calls them"
 fi
 
-report_optional_group() {   # $1 = test id, $2 = description, $3 = "tool:reason  tool:reason"
-	local id="$1" desc="$2" spec="$3" missing="" t reason
-	local oldifs="$IFS"
-	IFS='  '
-	for entry in $spec; do
+# $3 is a newline-separated list of "tool:reason".  It must be newline-separated,
+# not space-separated: IFS is a set of characters rather than a delimiter string,
+# so an earlier IFS='  ' still split on single spaces and tore every multi-word
+# reason apart — "spades.py:--ass spades" became the entry "spades.py:--ass" plus
+# a phantom tool named "spades", which was then reported missing even though
+# spades.py was installed.
+report_optional_group() {   # $1 = test id, $2 = description, $3 = "tool:reason" per line
+	local id="$1" desc="$2" spec="$3" missing="" t reason entry
+	while IFS= read -r entry; do
+		entry="${entry#"${entry%%[![:space:]]*}"}"	# strip leading blanks
 		[ -n "$entry" ] || continue
 		t="${entry%%:*}"
 		reason="${entry#*:}"
 		if have "$t"; then
 			diag "$( printf '%-14s %s  [%s]' "$t" "$( command -v "$t" )" "$( tool_version "$t" )" )"
 		else
-			missing="$missing $t($reason)"
+			missing="$missing $t($reason),"
 		fi
-	done
-	IFS="$oldifs"
+	done <<EOF
+$spec
+EOF
+	missing="${missing%,}"
 	if [ -z "$missing" ]; then
 		pass "$id" "$desc"
 	else

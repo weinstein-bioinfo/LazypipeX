@@ -88,7 +88,15 @@ mkdir -p "$RES" "$TMPD" "$LOGS"
 
 cd "$INSTALL" || exit 99
 
-have() { command -v "$1" >/dev/null 2>&1; }
+# A tool counts as available only if it is also executable.  `command -v`
+# alone is not enough: bash returns the path of a non-executable file found
+# on PATH, so a downloaded-but-not-chmod+x binary was reported as installed
+# and then failed at run time with "Permission denied".
+have() {
+	local p
+	p=$( type -P "$1" 2>/dev/null ) || return 1
+	[ -n "$p" ] && [ -x "$p" ]
+}
 
 TREE_BEFORE=$( git -C "$REPO" status --porcelain 2>/dev/null )
 
@@ -530,18 +538,34 @@ fi
 
 # ====================================== STEP-12 reference-genome reports =====
 
-if ! have create_report; then
-	skipt STEP-12 "reference-genome reports" "create_report (igv-reports) not on PATH"
+# The gate is the NCBI datasets CLI, not igv-reports: generate_igv_html() writes
+# the IGV pages itself with filebin2uri(), while the step fetches reference
+# genomes with `datasets` / `dataformat`.
+if ! have datasets || ! have dataformat; then
+	skipt STEP-12 "reference-genome reports" "NCBI datasets CLI (datasets/dataformat) not on PATH"
 elif need STEP-12 "reference-genome reports" STEP-10; then
 	lz_step "-p rgrep"
 	s12="$_XCUT"
 	RG="$OUT/reports/refgen.report.html"
 	if [ ! -s "$RG" ]; then
 		s12="$s12\n  missing or empty reports/refgen.report.html"
-	elif ! grep -q 'data:' "$RG"; then
-		s12="$s12\n  refgen.report.html contains no embedded data: URI"
+	else
+		# The summary page is only a table of links and carries no data: URI —
+		# use_data_uri is set for the per-species pages (lazypipe.pl:1271), not
+		# for the summary.  Asserting on the summary alone also misses the real
+		# failure mode: when the NCBI download fails the step warns, still writes
+		# the summary, and leaves every link behind it dead.  So check the linked
+		# pages exist, and that the tracks in them are embedded.
+		nigv=$( find "$OUT/reports" -name '*.igv.html' 2>/dev/null | wc -l )
+		if [ "$nigv" -lt 1 ]; then
+			s12="$s12\n  summary written but no per-species *.igv.html behind its links"
+		else
+			igv=$( find "$OUT/reports" -name '*.igv.html' 2>/dev/null | head -1 )
+			grep -q 'data:' "$igv" \
+				|| s12="$s12\n  $( basename "$igv" ) embeds no data: URI"
+		fi
 	fi
-	report_step STEP-12 "reference-genome reports" "$s12"
+	report_step STEP-12 "reference-genome reports ($( find "$OUT/reports" -name '*.igv.html' 2>/dev/null | wc -l ) IGV pages)" "$s12"
 fi
 
 # ================================================ STEP-13 stats + QC =========

@@ -86,7 +86,15 @@ mkdir -p "$RES" "$TMPD" "$LOGS"
 
 cd "$INSTALL" || exit 99
 
-have() { command -v "$1" >/dev/null 2>&1; }
+# A tool counts as available only if it is also executable.  `command -v`
+# alone is not enough: bash returns the path of a non-executable file found
+# on PATH, so a downloaded-but-not-chmod+x binary was reported as installed
+# and then failed at run time with "Permission denied".
+have() {
+	local p
+	p=$( type -P "$1" 2>/dev/null ) || return 1
+	[ -n "$p" ] && [ -x "$p" ]
+}
 TREE_BEFORE=$( git -C "$REPO" status --porcelain 2>/dev/null )
 
 PASSED=""
@@ -168,8 +176,8 @@ fi
 
 # ==================================================== E2E-02 all + rgrep =====
 
-if ! have create_report; then
-	skipt E2E-02 "'all' run adds the reference-genome report" "create_report (igv-reports) not on PATH"
+if ! have datasets || ! have dataformat; then
+	skipt E2E-02 "'all' run adds the reference-genome report" "NCBI datasets CLI (datasets/dataformat) not on PATH"
 elif need E2E-02 "'all' run adds the reference-genome report" E2E-01; then
 	lz_run E2E-02 "-p all --hostgen '$T4_HOSTGEN' --anns '$T4_ANNS' -s M15all"
 	e02=""

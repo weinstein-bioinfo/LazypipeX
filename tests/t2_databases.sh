@@ -61,7 +61,15 @@ LINT="$TESTS_DIR/lib/config_lint.pl"
 FIXVI="$TESTS_DIR/fixtures/tiny.vi.fa"
 FIXAA="$TESTS_DIR/fixtures/tiny.orfs.aa.fa"
 
-have() { command -v "$1" >/dev/null 2>&1; }
+# A tool counts as available only if it is also executable.  `command -v`
+# alone is not enough: bash returns the path of a non-executable file found
+# on PATH, so a downloaded-but-not-chmod+x binary was reported as installed
+# and then failed at run time with "Permission denied".
+have() {
+	local p
+	p=$( type -P "$1" 2>/dev/null ) || return 1
+	[ -n "$p" ] && [ -x "$p" ]
+}
 
 # lazypipe.pl and install_db.pl both prefer ./config.yaml over the installed
 # one, so run from the install dir and lint exactly the file they will read.

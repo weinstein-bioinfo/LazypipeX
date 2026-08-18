@@ -259,7 +259,8 @@ sub pipe_annotation_round1{
 							numth		=>$opt{numth},
 							orf_finder	=>$opt{gen},
 							min_orf_length=>$opt{min_orf_length},
-							retain_ties =>0);
+							retain_ties =>0,
+							call_sans	=>$opt{call_sans});
 
 			if($opt{clear}){		system("rm -f $dbhits_sans");}
 		}
@@ -497,7 +498,8 @@ sub pipe_annotation_round2{
 							min_bits		=>$opt{min_sans_bits},
 							numth		=>$opt{numth},
 							orf_finder	=>$opt{gen},
-							min_orf_length=>$opt{min_orf_length});
+							min_orf_length=>$opt{min_orf_length},
+							call_sans	=>$opt{call_sans});
 
 			if($opt{clear}){		system("rm -f $dbhits_sans");}
 		}
@@ -2180,16 +2182,22 @@ sub options_format{
 			if(!defined($ann1) || $ann1 eq ''){
 				die "ERROR: invalid annotation.strategy: $strat_str\n";
 			}
-			$opt{pipe}->{ann1}	= 1;
+			# --anns chooses WHICH DATABASES the annotation rounds use.  It must
+			# not decide WHICH STEPS run: that is --pipe's job.  Forcing
+			# $opt{pipe}{ann1}=1 here made "--pipe rgrep --anns corent.vi" run two
+			# annotation rounds nobody asked for, and forcing {ann2}=0 silently
+			# dropped an explicitly requested ann2 when the strategy defined none.
+			# Both rounds are dispatched only when the step was requested AND the
+			# databases are set (see the pipe_annotation_round[12] guards), so
+			# setting the values alone is sufficient and correct.
 			$opt{ann1}			= lc($ann1);
+			$opt{ann2}			= (!defined($ann2) || $ann2 eq '') ? 0 : lc($ann2);
 
-			if(!defined($ann2) || $ann2 eq ''){
-				$opt{pipe}->{ann2} 	= 0;
-				$opt{ann2}			= 0;
-			}
-			else{
-				$opt{pipe}->{ann2} 	= 1;
-				$opt{ann2}			= lc($ann2);
+			# Asking for a round the strategy cannot supply is a silent no-op
+			# otherwise; say so rather than let the user infer it from output.
+			if($opt{pipe}->{ann2} && !$opt{ann2}){
+				print STDERR "WARNING: $subid: --pipe requests ann2, but strategy "
+					."'$strat' defines no --ann2: round 2 will be skipped\n";
 			}
 		}
 		else{
@@ -2591,6 +2599,7 @@ sub assembly_stats{
 	my $ids_tmp		= "$res_dir/ids.tmp";
 	my $ids2_tmp		= "$res_dir/ids2.tmp";
 	my $ids3_tmp		= "$res_dir/ids3.tmp";
+	my $readids_tmp	= "$res_dir/readids.tmp";
 
 	# out:
 	my $stats_yaml	= "$res_dir/assembly.stats.yaml";
@@ -2603,7 +2612,13 @@ sub assembly_stats{
 	# START WORKING
 	#	STATS FOR READS
 	my %stats		= ();
-	system_call("seqkit grep -j $threads -f <(cut -f1 $readid_contigid) $r1_hgflt 1> $r1_contigs");
+	# readid_contigid.tsv stores bare read ids, while the fastq headers carry the
+	# mate suffix (@...:1379/1).  seqkit matches on the whole id, so grepping the
+	# bare ids matched nothing and reads.assembled came out as all zeros even
+	# though contigs had been assembled.  Offer both forms: the suffixed one for
+	# libraries that carry /1, the bare one for those that do not.
+	system_call("cut -f1 $readid_contigid | awk '{ print \$0; print \$0\"/1\" }' | sort -u 1> $readids_tmp");
+	system_call("seqkit grep -j $threads -f $readids_tmp $r1_hgflt 1> $r1_contigs");
 	system_call("seqkit stats -j $threads -baT $r1_trim $r1_hgflt $r1_contigs  1> $seqkit_tmp");
 		#seqkit stats -a: num_seqs	sum_len	min_len	avg_len	max_len	Q1	Q2	Q3	sum_gap	N50	Q20(%)	Q30(%)	GC(%)
 	my %tmp			= read_tsv2hashtable($seqkit_tmp,'file');
