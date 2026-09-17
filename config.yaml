@@ -221,16 +221,21 @@ ann.databases:
       db:     "sans"
       name:   "UniProtKB"
       search: "sans"
+   # --- ICTV exemplar+additional isolates (v20260323) ------------------------
+   # Both archives unpack flat, with the index prefixes blastn.ictv/blastp.ictv,
+   # so one versioned directory holds the nucleotide and the protein index side
+   # by side.  Subject ids are ICTV Isolate IDs: --pipe ictv joins them against
+   # ICTV.VMR below, so the two must stay on the same VMR release.
    blastn.ictv:
-      db:     "$databases/ictv.MSL40.v1"
-      name:   "ICTV MSL40.v1 E+A"
+      db:     "$databases/ictv.20260323/blastn.ictv"
+      name:   "ICTV VMR MSL40.v2 E+A"
       search: "blastn"
-      url:    "https://a3s.fi/lazypipe-db/ictv.MSL40.v1.tar.gz"
+      url:    "https://a3s.fi/lazypipe-db/2026/blastn.ictv.v20260323.tar.gz"
    blastp.ictv:
-      db:     "$databases/ictv.MSL40.v1.prot"
-      name:   "ICTV MSL40.v1 E+A"
+      db:     "$databases/ictv.20260323/blastp.ictv"
+      name:   "ICTV VMR MSL40.v2 E+A"
       search: "blastp"
-      url:    "https://a3s.fi/lazypipe-db/ictv.MSL40.v1.prot.tar.gz"
+      url:    "https://a3s.fi/lazypipe-db/2026/blastp.ictv.v20260323.tar.gz"
    blastp.nr:
       db:     "$databases/nr_cluster_seq.vi.v20251006"
       name:   "BLAST index for nr_cluster_seq v20251006"
@@ -303,6 +308,13 @@ host.databases:
       latinName:  "Aedes albopictus"
       commonName: "Asian tiger mosquito"
       url:        "https://a3s.fi/lazypipe-hostgen/GCF_035046485.1_genomic+rna.tar.gz"
+   Candoia_aspera:
+      accession:  "GCA_035149785.1"
+      db:         "$hostgenomes/GCA_035149785.1_genomic+rna.fna.gz"
+      name:       "Candoia aspera (viper boa) genomic+rna"
+      latinName:  "Candoia aspera"
+      commonName: "viper boa"
+      url:        "https://a3s.fi/lazypipe-hostgen/GCA_035149785.1_genomic+rna.tar.gz"
    Chlorocebus_aethiops:
       accession:  "GCA_023783515.1"
       db:         "$hostgenomes/GCA_023783515.1_genomic.fna.gz"

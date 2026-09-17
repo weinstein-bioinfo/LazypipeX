@@ -31,6 +31,15 @@
 #
 # Set T3_KEEP=1 to leave the results tree behind for inspection.
 #
+# The ICTV step (--pipe ictv, STEP-09b/09c) is off by default: it is supported
+# but still in development and is not part of the User Guide, so it must not
+# decide the exit status of a routine post-installation run.  Turn it on with
+#
+#     T3_ICTV=1 tests/t3_steps.sh
+#
+# It needs blastn.ictv, blastp.ictv and the ICTV.VMR table installed; when any of
+# them is absent the two tests skip rather than fail.
+#
 # Exit status = number of failed tests (0 = all good).  Neither skips nor TODOs
 # are failures: skips mark absent optional tooling or an unrun prerequisite,
 # TODOs mark known defects documented in docs/testing_roadmap.md §12.
@@ -448,6 +457,180 @@ if need STEP-09 "annotation round 2" STEP-05; then
 		[ -z "$extra" ] || s09="$s09\n  round-2 contigs absent from round 1: $extra"
 	fi
 	report_step STEP-09 "annotation round 2: $( [ -s "$A2" ] && echo $(( $( wc -l < "$A2" ) - 1 )) || echo 0 ) rows" "$s09"
+fi
+
+# ==================================== STEP-09b/09c ICTV annotation + EM ======
+
+# --pipe ictv re-annotates the viral contigs against the ICTV exemplar and
+# additional-isolate indexes, then runs EM_loop() (perl/Lazypipe/SeqAn.pm) to
+# spread each contig's alignment scores over isolates and report a probability
+# per isolate and per genus.  Not covered by docs/testing_roadmap.md §6: the step
+# is supported but in development and undocumented in the User Guide, so it is
+# opt-in and never contributes a failure unless it was asked for.
+#
+# Split in two so that a toy library with no ICTV hit skips the probability
+# assertions instead of passing them vacuously: 09b is the plumbing, 09c is what
+# the EM produced.
+ICTV_VMR=$( perl -MYAML::Tiny -e '
+	my $y = YAML::Tiny->read("config.yaml");
+	my $p = $y->[0]{"ICTV.VMR"}{db} // "";
+	$p =~ s{\$(\w+)}{ defined($ENV{$1}) ? $ENV{$1} : "\$$1" }ge;
+	print $p;' 2>/dev/null )
+
+# Installed means what it means everywhere else in the pipeline: glob("$db*")
+# is non-empty, which is exactly what --databases reports.
+ICTV_DBS=""
+if [ "${T3_ICTV:-0}" = "1" ]; then
+	try perl "$LZP" --databases
+	for d in blastn.ictv blastp.ictv; do
+		printf '%s\n' "$_OUT" | grep -qx -- "$d:" || ICTV_DBS="$ICTV_DBS $d"
+	done
+fi
+
+ICTV_OUT=""
+ICTV_D="$OUT/ictv"
+if [ "${T3_ICTV:-0}" != "1" ]; then
+	skipt STEP-09b "ICTV annotation writes ictv/ictv.annot.tsv" \
+		"set T3_ICTV=1 to run (step is in development and not in the User Guide)"
+elif [ -n "$ICTV_DBS" ]; then
+	skipt STEP-09b "ICTV annotation writes ictv/ictv.annot.tsv" \
+		"not installed:$ICTV_DBS (perl/install_db.pl --db blastn.ictv --db blastp.ictv)"
+elif [ ! -s "$ICTV_VMR" ]; then
+	skipt STEP-09b "ICTV annotation writes ictv/ictv.annot.tsv" \
+		"no ICTV VMR table at ${ICTV_VMR:-<ICTV.VMR:db unset in config.yaml>}"
+elif need STEP-09b "ICTV annotation writes ictv/ictv.annot.tsv" STEP-06; then
+	lz_step "-p ictv"
+	s09b="$_XCUT"
+	ICTV_OUT="$_OUT"		# EM_loop() traces its iterations to stderr under -v
+	AI="$ICTV_D/ictv.annot.tsv"
+	if [ ! -s "$AI" ]; then
+		s09b="$s09b\n  missing or empty ictv/ictv.annot.tsv"
+	else
+		# The three columns EM_q_t_logprob() requires; it dies without them.
+		hdr=$( head -1 "$AI" )
+		for c in qseqid staxid bitscore; do
+			printf '%s' "$hdr" | tr '\t' '\n' | grep -qx -- "$c" \
+				|| s09b="$s09b\n  ictv.annot.tsv has no '$c' column, which the EM requires"
+		done
+		# Subject taxids here are ICTV Isolate.NIDs, and lazypipe.pl derives them
+		# with ^VMR([0-9]+); anything else joins against nothing in the VMR table.
+		scol=$( printf '%s' "$hdr" | tr '\t' '\n' | grep -nx staxid | cut -d: -f1 )
+		if [ -n "$scol" ]; then
+			bad=$( awk -F'\t' -v c="$scol" 'NR>1 && $c !~ /^[0-9]+$/ { print $c; exit }' "$AI" )
+			[ -z "$bad" ] || s09b="$s09b\n  non-numeric Isolate.NID in staxid: $bad"
+		fi
+		# The EM fits over whatever is in staxid, and every table behind it joins
+		# that against ICTV.VMR on Isolate.NID.  A database keyed on anything else
+		# — NCBI taxids, say — still annotates, still runs the EM, and then joins
+		# to NA, so the reports come out empty with no error anywhere.  Numeric
+		# staxids are therefore not enough: they have to be ICTV isolates.
+		if [ -n "$scol" ] && [ -s "$ICTV_VMR" ]; then
+			awk -F'\t' -v c="$scol" 'NR>1 { print $c }' "$AI" | sort -u > "$WORK/ictv_staxid.txt"
+			awk -F'\t' 'NR==1 { for(i=1;i<=NF;i++) if($i=="Isolate ID") c=i; next }
+			            c     { sub(/^VMR/,"",$c); print $c }' "$ICTV_VMR" | sort -u > "$WORK/ictv_vmrnid.txt"
+			nhit=$( comm -12 "$WORK/ictv_staxid.txt" "$WORK/ictv_vmrnid.txt" | grep -c . )
+			nsub=$( grep -c . "$WORK/ictv_staxid.txt" )
+			[ "$nhit" -gt 0 ] || s09b="$s09b\n  none of the $nsub staxid(s) is an Isolate.NID in $( basename "$ICTV_VMR" )"
+			[ "$nhit" -gt 0 ] || s09b="$s09b\n  the ICTV database is not keyed on ICTV isolates, so every ICTV report joins to NA and is filtered away"
+		fi
+	fi
+	ICTV_ROWS=$( [ -s "$AI" ] && echo $(( $( wc -l < "$AI" ) - 1 )) || echo 0 )
+	report_step STEP-09b "ICTV annotation: $ICTV_ROWS rows in ictv/ictv.annot.tsv" "$s09b"
+fi
+
+if [ -n "${ICTV_ROWS:-}" ] && [ "${ICTV_ROWS:-0}" -eq 0 ]; then
+	skipt STEP-09c "EM assigns probabilities to ICTV isolates" \
+		"the ICTV search found no hit in this library, so the EM had nothing to fit"
+elif need STEP-09c "EM assigns probabilities to ICTV isolates" STEP-09b; then
+	s09c=""
+	PROB="$ICTV_D/ictv.taxid_prob.tsv"
+	ITER="$ICTV_D/ictv.taxid_prob_byiter.tsv"
+
+	# --- what the EM wrote ---------------------------------------------------
+	if [ ! -s "$PROB" ]; then
+		s09c="$s09c\n  missing or empty ictv/ictv.taxid_prob.tsv"
+	else
+		phdr=$( head -1 "$PROB" )
+		for c in Isolate.NID Species Genus prob prob.genus; do
+			printf '%s' "$phdr" | tr '\t' '\n' | grep -qx -- "$c" \
+				|| s09c="$s09c\n  ictv.taxid_prob.tsv has no '$c' column"
+		done
+		pcol=$( printf '%s' "$phdr" | tr '\t' '\n' | grep -nx prob | cut -d: -f1 )
+		ntax=$(( $( wc -l < "$PROB" ) - 1 ))
+		[ "$ntax" -ge 1 ] || s09c="$s09c\n  ictv.taxid_prob.tsv has a header but no isolate"
+		if [ -n "$pcol" ] && [ "$ntax" -ge 1 ]; then
+			# F(t) is a distribution over the isolates the EM was given: every
+			# value in [0,1] and the column summing to 1.  A sum that drifts off 1
+			# means mass was lost or double counted in the M-step.
+			oob=$( awk -F'\t' -v c="$pcol" 'NR>1 && ($c+0 < 0 || $c+0 > 1) { print $c; exit }' "$PROB" )
+			[ -z "$oob" ] || s09c="$s09c\n  prob outside [0,1]: $oob"
+			psum=$( awk -F'\t' -v c="$pcol" 'NR>1 { s+=$c } END { printf "%.6f", s+0 }' "$PROB" )
+			awk -v s="$psum" 'BEGIN { exit !(s > 0.99 && s < 1.01) }' \
+				|| s09c="$s09c\n  prob column sums to $psum, not 1: the EM posterior does not normalise"
+			diag "  EM fitted $ntax isolate(s), prob sums to $psum"
+		fi
+	fi
+
+	# --- the per-iteration trace --------------------------------------------
+	if [ ! -s "$ITER" ]; then
+		s09c="$s09c\n  missing or empty ictv/ictv.taxid_prob_byiter.tsv"
+	elif [ -s "$PROB" ]; then
+		nit=$(( $( head -1 "$ITER" | tr '\t' '\n' | grep -c . ) - 2 ))	# minus Isolate.NID, Species
+		[ "$nit" -ge 2 ] || s09c="$s09c\n  the iteration trace has $nit iteration column(s); EM runs at least the initial one plus three steps"
+		[ "$( wc -l < "$ITER" )" -eq "$( wc -l < "$PROB" )" ] \
+			|| s09c="$s09c\n  taxid_prob_byiter.tsv and taxid_prob.tsv disagree on the number of isolates"
+	fi
+
+	# --- the EM's own trace on stderr ---------------------------------------
+	# EM_loop() prints "iteration = N, logL = X, logLdiff = Y" per step under -v.
+	nem=$( printf '%s\n' "$ICTV_OUT" | grep -cF 'EM_loop(): iteration' )
+	if [ "$nem" -lt 2 ]; then
+		s09c="$s09c\n  EM_loop() logged $nem iteration(s); it did not run"
+	else
+		# EM increases the likelihood at every step by construction.  A negative
+		# logLdiff is a defect in the E- or M-step, not a tolerance question.
+		drop=$( printf '%s\n' "$ICTV_OUT" \
+			| sed -n 's/.*logLdiff = \(-\{0,1\}[0-9.e+-]*\).*/\1/p' \
+			| awk '$1+0 < -1e-6 { print $1; exit }' )
+		[ -z "$drop" ] || s09c="$s09c\n  log-likelihood decreased during EM (logLdiff = $drop)"
+		# Converged, rather than stopped by maxiter with the fit still moving.
+		printf '%s\n' "$ICTV_OUT" | grep -qF 'exiting EM' \
+			|| s09c="$s09c\n  EM ran $nem iterations without converging (no 'exiting EM'); it hit maxiter"
+	fi
+
+	# --- the reports the probabilities feed ----------------------------------
+	AT="$ICTV_D/ictv.annot_table.tsv"
+	if [ ! -s "$AT" ]; then
+		s09c="$s09c\n  missing or empty ictv/ictv.annot_table.tsv"
+	else
+		athdr=$( head -1 "$AT" )
+		for c in Isolate.prob Genus.prob Species Genus Family; do
+			printf '%s' "$athdr" | tr '\t' '\n' | grep -qx -- "$c" \
+				|| s09c="$s09c\n  ictv.annot_table.tsv has no '$c' column"
+		done
+		# lazypipe.pl filters this table at Genus.prob >= 0.001; a row below the
+		# cutoff means the filter did not run.
+		gcol=$( printf '%s' "$athdr" | tr '\t' '\n' | grep -nx 'Genus.prob' | cut -d: -f1 )
+		if [ -n "$gcol" ]; then
+			low=$( awk -F'\t' -v c="$gcol" 'NR>1 && $c ~ /^[0-9.eE+-]+$/ && $c+0 < 0.001 { print $c; exit }' "$AT" )
+			[ -z "$low" ] || s09c="$s09c\n  row kept with Genus.prob = $low, below the 0.001 cutoff"
+		fi
+	fi
+	# Both workbooks come from "$perl_scripts/write_excel.pl" (lazypipe.pl:1546 and
+	# :1590), which is not in the repository — the shell redirect still creates the
+	# file, so an empty ictv.*.xlsx means the generator was never there rather than
+	# that it wrote nothing.  Checked by the zip magic (PK\x03\x04); the missing
+	# script also aborts the step, which the cross-cutting exit-status check sees.
+	for x in ictv.annot_table.xlsx ictv.abund_table.xlsx; do
+		f="$ICTV_D/$x"
+		if [ ! -s "$f" ]; then
+			s09c="$s09c\n  missing or empty ictv/$x — is perl/write_excel.pl installed?"
+		elif [ "$( head -c 2 "$f" )" != "PK" ]; then
+			s09c="$s09c\n  ictv/$x is not a workbook (no PK zip magic)"
+		fi
+	done
+
+	report_step STEP-09c "EM probabilities: taxid_prob, iteration trace and ICTV tables" "$s09c"
 fi
 
 # ======================================================= STEP-10 reports =====

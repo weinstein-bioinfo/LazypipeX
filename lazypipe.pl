@@ -1541,9 +1541,18 @@ sub pipe_annotation_ictv{
 	system("mv $annot_table.tmp $annot_table");
 
 
-	# convert $annot_table to excel file: does not work: TODO printing to excel
-	#system_call("$opt{call_R} $R_scripts/print_annot_table.R  $annot_table $annot_excel domain Viruses 2>> $log");
-	system_call("$perl_scripts/write_excel.pl $annot_table 1> $annot_excel 2>> $log");
+	# convert $annot_table to excel file
+	# get_annot_tables() splits sheets on the toptaxrank column and dies if it is
+	# absent, so the rank named here must be 'division' — the field added above.
+	# There is no 'domain' column in this table.  The rest of what the R side
+	# needs is inherited from $annot: qseqid, qseqlen and bitscore (it sorts on
+	# them) plus the bphage field it uses to keep phages off the Viruses sheet.
+	if( nlines($annot_table) > 1 ){
+		system_call("$opt{call_R} $R_scripts/print_annot_table.R  $annot_table $annot_excel division Viruses 2>> $log");
+	}
+	else{
+		print STDERR "\n\tWARNING: $subid: no workbook: $annot_table has no rows\n";
+	}
 
 		# SORT CONTIGS TO DIRS USING ICTV CLASSIFICATION
 	#system_call("perl $perl_scripts/sort_contigs_bytaxa_v3.pl -c $contigs -a $annot_table --res $opt{res}/contigs --toptaxrank $toptaxrank -v &>> $log");
@@ -1587,7 +1596,23 @@ sub pipe_annotation_ictv{
 	system("mv $abund_table.tmp $abund_table");
 	system("rm -f $readn_taxid $contig_taxid_bits");
 
-	system_call("$perl_scripts/write_excel.pl $abund_table 1> $abund_excel 2>> $log");
+	# convert $abund_table to excel file
+	# get_abund_tables() requires every rank it is asked for to be a column of the
+	# table, and splits the sheets on the last one.  This table carries the VMR
+	# spelling — Species/Genus/Family, capitalised — and no rank above family, so
+	# the ranks are named as they are spelled here and 'division' is added for the
+	# top rank, exactly as the annotation table does above.  readn and contign,
+	# which the R side sums over, come from get_abund_table.pl.
+	system_call("csvtk mutate2 -tj $numth -n division -e \" 'Viruses' \" $abund_table 1> $abund_table.tmp 2>> $log");
+	system("mv $abund_table.tmp $abund_table");
+
+	if( nlines($abund_table) > 1 ){
+		system_call("$opt{'call_R'} $R_scripts/print_abund_table.R ".
+					"$abund_table $abund_excel Species,Genus,Family,division Viruses $opt{tail} 2>> $log");
+	}
+	else{
+		print STDERR "\n\tWARNING: $subid: no workbook: $abund_table has no rows\n";
+	}
 
 }
 
@@ -1957,7 +1982,7 @@ sub clean{
 	system_call("rm -fR $opt{res}/Roadmaps", $opt{'v'});
 	system_call("rm -fR $opt{res}/*tmp*", $opt{'v'});
 	system_call("rm -fR $opt{res}/assembler_out", $opt{'v'});
-	system_call("rm -fR $opt{res}/dbhits.*", $opt{v});
+	#system_call("rm -fR $opt{res}/dbhits.*", $opt{v});
 	system_call("rm -fR $opt{res}/contigs.fa.amb $opt{res}/contigs.fa.ann $opt{res}/contigs.fa.bwt $opt{res}/contigs.fa.pac $opt{res}/contigs.fa.sa");
 	system_call("rm -fR $opt{res}/hostgen.sam.flt");
 }
@@ -2149,6 +2174,7 @@ sub options_format{
 			$pipeh{'stats'}		= 1;
 			$pipeh{'report'}		= 1;
 			$pipeh{'pack'}		= 1;
+			$pipeh{'clean'}		= 1;
 		}
 		elsif(  $t =~ m/^all/i ){
 			$pipeh{'prepro'} 	= 1;
