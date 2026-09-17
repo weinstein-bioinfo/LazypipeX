@@ -32,6 +32,7 @@ Guide version: v3.1.1 · Edited: 2026-08-14
     - <a href="#AbundanceTables">Abundance tables</a>
     - <a href="#AnnotationTables">Annotation tables</a>
     - <a href="#QualityControlPlots">Quality control plots</a>
+    - <a href="#Provenance">Provenance</a>
   - <a href="#RetrievingReads">Retrieving reads for a contig or taxid</a>
 - <a href="#CommandLineOptions">Command line options</a>
 - <a href="#ConfigOptions">Additional options in <code>config.yaml</code></a>
@@ -545,6 +546,7 @@ In example 1 results were output to `$data/results/M15small`.
 | scaffolds.fa        | scaffolds, if available
 | figures             | contig and read length histograms
 | History.log         | log of command line calls
+| provenance.txt      | software, databases and tool versions of every run (see [Provenance](#Provenance))
 | reports/krona.report.html | Abundancies in KronaGraph
 | reports/refgen.report.html | IGV reports with viral contigs aligned against reference genomes
 | taxprofile.txt      | taxonomic profile in CAMI format
@@ -635,6 +637,42 @@ Quality Control (QC) plots include length histograms for reads and contigs.
 | figures/contigs.5-95-100.png | length hist for contigs in Q0-Q5, Q5-Q95, and Q95-Q100 percentiles
 
 **Table 10:** Quality Control plots
+
+<a name="Provenance" id="Provenance"></a>
+#### Provenance
+
+Every run appends a plain-text record to `provenance.txt` in the results directory, after the analysis steps and before `pack`, so the file is also inside the results tarball. It holds what a methods section and a reviewer will ask for, read while the run is still on the node:
+
+- **pipeline**: version, SHA-256 of `lazypipe.pl` and `config.yaml`, git commit of the installation, loaded modules
+- **job_script**: under Slurm, the path and SHA-256 of the batch script as submitted, and whether the file has changed since
+- **run**: start time, steps, the exact command line, input reads with sizes
+- **databases**: the annotation strategy and every database it resolves to, the host genomes and the taxonomy, each with its versioned name, path, total size, newest file date and download URL
+- **parameters**: the `general.parameters` of `config.yaml` after command-line overrides
+- **freshness check**: a warning if a pipeline file or database was modified while the run was going
+- **tools** and **R packages**: versions of the tools this run's options use
+
+```
+# Provenance of a LazypipeX run
+
+written:        2026-09-17T19:58:57+0300
+sample:         M15small
+...
+databases:
+  annotation_strategy: vi.chain3.env
+    vi.chain3.env:         --ann1 minimap.core_nt,diamondp.uniref100.abv
+
+  annotation round 1 (--ann1):
+  minimap.core_nt            core_nt.2026_07_18
+                               path: .../core_nt.2026_07_18/minimap.core_nt.2026_07_18.fa
+                               files: 978.9 GB, newest 2026-08-06
+...
+tools (versions at run time):
+  megahit        MEGAHIT v1.2.9
+  minimap2       2.30-r1287
+  diamond        diamond version 2.2.4
+```
+
+Rerunning steps on the same sample appends a new section rather than replacing the file, so it covers the whole history of that results directory, as `History.log` does for the command lines.
 
 <a name="RetrievingReads" id="RetrievingReads"></a>
 ### Retrieving reads for a contig or taxid

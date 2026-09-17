@@ -133,6 +133,7 @@ UNDEF_VARS=""
 STEP_TIMES=""
 TOTAL_SECS=0
 _SECS=""
+N_LZ=0		# successful lazypipe.pl invocations; each must append one provenance.txt section
 
 # Run one pipeline step.  Sets $_RC/$_OUT (via try_sh) and $_XCUT to any
 # cross-cutting problem: §6 requires exit 0, no ERROR: on stderr, no undefined
@@ -149,6 +150,8 @@ lz_step() {
 	_SECS=$(( $( date +%s ) - t0 ))
 
 	_XCUT=""
+	# a run that dies (e.g. in option checking) never reaches write_provenance()
+	[ "$_RC" -eq 0 ] && N_LZ=$(( N_LZ + 1 ))
 	[ "$_RC" -eq 0 ] || _XCUT="$_XCUT\n  exit status $_RC"
 	if printf '%s' "$_OUT" | grep -q '^ERROR:'; then
 		_XCUT="$_XCUT\n  ERROR: on stderr: $( printf '%s' "$_OUT" | grep -m1 '^ERROR:' | cut -c1-90 )"
@@ -783,6 +786,7 @@ if need STEP-14 "pack writes a tarball" STEP-10; then
 		listing=$( tar -tzf "$TARB" 2>/dev/null )
 		printf '%s' "$listing" | grep -q 'reports/' || s14="$s14\n  tarball lists no reports/ entry"
 		printf '%s' "$listing" | grep -q 'abund_table' || s14="$s14\n  tarball lists no abundance table"
+		printf '%s' "$listing" | grep -q 'provenance.txt' || s14="$s14\n  tarball lists no provenance.txt"
 	fi
 	report_step STEP-14 "pack: tarball lists reports/ and the abundance tables" "$s14"
 fi
@@ -801,6 +805,38 @@ if need STEP-15 "clean removes intermediates and keeps reports" STEP-14; then
 		[ -e "$OUT/$f" ] && s15="$s15\n  intermediate still present after clean: $f"
 	done
 	report_step STEP-15 "clean: intermediates gone, reports intact" "$s15"
+fi
+
+# =================================================== STEP-15b provenance =====
+
+# write_provenance() appends one section per lazypipe.pl invocation, so after the
+# steps above provenance.txt must hold one section per successful lz_step call,
+# and the sections of the steps that used a database or tool must name it.
+if need STEP-15b "provenance.txt has one section per run" STEP-01; then
+	s15b=""
+	PROV="$OUT/provenance.txt"
+	if [ ! -s "$PROV" ]; then
+		s15b="$s15b\n  missing or empty provenance.txt"
+	else
+		nsec=$( grep -c '^# Provenance of a LazypipeX run$' "$PROV" )
+		[ "$nsec" -eq "$N_LZ" ] || s15b="$s15b\n  $nsec sections for $N_LZ successful lazypipe.pl invocations"
+		for h in '^pipeline:$' '^run:$' '^databases:$' '^tools (versions at run time):$' '^R packages:$'; do
+			n=$( grep -c -- "$h" "$PROV" )
+			[ "$n" -eq "$nsec" ] || s15b="$s15b\n  '$h' appears $n times in $nsec sections"
+		done
+		grep -q "^sample: *$T3_SAMPLE$" "$PROV" || s15b="$s15b\n  no 'sample: $T3_SAMPLE' line"
+		grep -q '^  lazypipe.pl:  sha256 [0-9a-f]\{64\}$' "$PROV" || s15b="$s15b\n  no sha256 of lazypipe.pl"
+		# the databases this run used are listed: round 1 and the host genome
+		case " $PASSED " in
+			*" STEP-06 "*)
+				grep -q "^  $T3_ANN1 " "$PROV" || s15b="$s15b\n  round-1 database $T3_ANN1 not listed" ;;
+		esac
+		grep -q "^  $T3_HOSTGEN " "$PROV" || s15b="$s15b\n  host genome $T3_HOSTGEN not listed"
+		if have megahit && ! grep -q '^  megahit  .*[0-9]' "$PROV"; then
+			s15b="$s15b\n  megahit is on PATH but its version is not recorded"
+		fi
+	fi
+	report_step STEP-15b "provenance: $( [ -s "$PROV" ] && grep -c '^# Provenance of a LazypipeX run$' "$PROV" || echo 0 ) sections for $N_LZ runs" "$s15b"
 fi
 
 # =============================================== STEP-16 read retrieval ======

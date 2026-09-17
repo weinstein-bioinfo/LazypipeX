@@ -6,6 +6,10 @@ use Getopt::Long qw(GetOptions);
 use YAML::Tiny;
 use File::Temp  qw(tempdir);
 use POSIX qw(strftime);
+use Cwd qw(getcwd);
+use Digest::SHA;
+use File::Spec;
+use Sys::Hostname qw(hostname);
 my $install_dir;
 BEGIN{ $install_dir	= defined($ENV{'LAZYPIPE_INSTALL_DIR'}) ? $ENV{'LAZYPIPE_INSTALL_DIR'} : dirname(__FILE__) };
 use lib "$install_dir/perl";	# load from perl-subdir
@@ -172,6 +176,8 @@ pipe_annotation_ictv(\%opt) if( $pipe{ictv});
 generate_reports(\%opt) if( $pipe{report} );
 generate_refgen_reports(\%opt) if( $pipe{rgreport});
 generate_stats(\%opt) if( $pipe{stats} );
+	# after every analysis step and before pack, so the tarball carries it too
+write_provenance(\%opt);
 pack_files(\%opt) if( $pipe{pack} );
 clean(\%opt) if( $pipe{clean} );
 # PIPELINE CALLS END HERE
@@ -1958,6 +1964,7 @@ sub pack_files{
 	push(@files_share, "$res/reports");
 		# VARIOUS
 	push(@files_share, "$res/History.log");
+	push(@files_share, "$res/provenance.txt");
 
 	# filter existing-files
 	my @files_share_flt = ();
@@ -1972,6 +1979,314 @@ sub pack_files{
 	system_call("tar -czf $dirname/$basename.tar.gz -C $dirname/$basename.tar ." );
 	system_call("rm -fR $dirname/$basename.tar" );
 }
+
+
+#
+# PROVENANCE
+#
+# Append a human-readable record of this run to $res/provenance.txt: pipeline and
+# config checksums, the job script, the command, every database with its version,
+# path and size, tool and R package versions.  Everything is read while the run
+# is still on the node, so a module or database swapped later cannot leak in.
+#
+# Ported from lazypipe-projects/scripts/write_provenance.bash, which rebuilt the
+# same record for a finished batch from each sample's History.log and could only
+# query tool versions after the fact.
+#
+# Each invocation appends its own section, so step-wise runs of one sample stay
+# traceable, exactly as History.log does for the command lines.
+#
+sub write_provenance{
+	my $subid	= "write_provenance()";
+	my %opt		= %{shift()};
+	my $out		= "$opt{res}/provenance.txt";
+	my $fmt_day	= sub { strftime('%Y-%m-%d', localtime(shift)) };
+	my @stale	= ();	# files modified after this run started
+	my @notfound	= ();
+
+	print STDERR "\n# PROVENANCE\n\n";
+
+	my $txt		= "";
+	my $line	= sub { $txt .= join('', @_)."\n" };
+
+	# one database/filter/taxonomy entry: name, path, size and date of its files, url
+	my $row		= sub {
+		my ($label, $name, $path, $url) = @_;
+		my ($m, $sz)	= prov_files($path);
+		$line->(sprintf("  %-26s %s", $label, $name));
+		$line->(sprintf("  %-26s   path: %s", '', $path));
+		$line->(sprintf("  %-26s   files: %s", '', defined($m) ? sprintf('%.1f GB, newest %s', $sz/1e9, $fmt_day->($m)) : 'NOT FOUND'));
+		$line->(sprintf("  %-26s   url:  %s", '', $url)) if( $url && $url ne 'NA' );
+		push(@stale, "$label ($path)") if( defined($m) && $m > $^T );
+		push(@notfound, "$label ($path)") if( !defined($m) );
+	};
+
+	# ---- header
+	my $script	= File::Spec->rel2abs($0);
+	$line->("# Provenance of a LazypipeX run");
+	$line->();
+	$line->("written:        ", strftime('%Y-%m-%dT%H:%M:%S%z', localtime));
+	$line->("written_by:     ", ($ENV{USER} || getpwuid($<) || '?'), '@', hostname());
+	$line->("working_dir:    ", getcwd());
+	$line->("sample:         ", $opt{sample});
+	$line->("results_dir:    ", File::Spec->rel2abs($opt{res}));
+	if( $ENV{SLURM_JOB_ID} ){
+		my $array	= ($ENV{SLURM_ARRAY_JOB_ID} && defined($ENV{SLURM_ARRAY_TASK_ID}))
+					? " (array task $ENV{SLURM_ARRAY_JOB_ID}_$ENV{SLURM_ARRAY_TASK_ID})" : "";
+		$line->("slurm_job:      $ENV{SLURM_JOB_ID}$array");
+	}
+	else{
+		$line->("slurm_job:      (none: not run under Slurm)");
+	}
+
+	# ---- pipeline
+	$line->();
+	$line->("pipeline:");
+	$line->("  version:      $PIPELINE_NAME $PIPELINE_VERSION");
+	$line->("  install_dir:  $install_dir");
+	$line->("  lazypipe.pl:  sha256 ", prov_sha256($script));
+	$line->("  script:       $script") if( $script ne File::Spec->rel2abs("$install_dir/lazypipe.pl") );
+	$line->("  git:          ", prov_git_state($install_dir));
+	$line->("  config:       ", File::Spec->rel2abs($config_file));
+	$line->("  config_sha256: ", prov_sha256($config_file));
+	$line->("  modules:      ", ($ENV{LOADEDMODULES} || '(none loaded)'));
+
+	# ---- job script: the copy Slurm stored at submission, not the file as it is now
+	if( $ENV{SLURM_JOB_ID} ){
+		my $show	= `timeout 30 scontrol show job $ENV{SLURM_JOB_ID} 2>/dev/null`;
+		my ($cmd)	= $show =~ m/^\s*Command=(.*)$/m;
+		my $batch	= `timeout 30 scontrol write batch_script $ENV{SLURM_JOB_ID} - 2>/dev/null`;
+		$line->();
+		if( $? == 0 && $batch ne '' && defined($cmd) && -f $cmd ){
+			my $submitted	= Digest::SHA->new(256)->add($batch)->hexdigest;
+			my $on_disk		= prov_sha256($cmd);
+			$line->("job_script:");
+			$line->("  path:         $cmd");
+			$line->("  sha256:       $submitted");
+			$line->("  on_disk:      ", ($on_disk eq $submitted) ? "same as submitted" : "CHANGED since submission (sha256 $on_disk)");
+			$line->("  git:          ", prov_git_state($cmd));
+		}
+		else{
+			$line->("job_script:     (none: not an sbatch job, or scontrol unavailable)");
+		}
+	}
+
+	# ---- run
+	my @step_order	= qw(prepro filter assemble realign ann1 ann2 ictv report rgreport stats pack clean);
+	$line->();
+	$line->("run:");
+	$line->("  started:      $time");
+	$line->("  finished:     ", strftime("%Y/%m/%d %H:%M:%S", localtime), "   (analysis steps; pack and clean follow)");
+	$line->("  steps:        ", join(',', grep { $opt{pipe}->{$_} } @step_order));
+	$line->("  command:      $commandline");
+	foreach my $r('read1','read2'){
+		next if( $r eq 'read2' && $opt{se} );
+		next if( !$opt{$r} );
+		my $f	= File::Spec->rel2abs($opt{$r});
+		$line->(sprintf("  %-13s %s (%s)", "$r:", $f, (-e $f) ? ((-s $f) >= 1e9 ? sprintf('%.2f GB', (-s $f)/1e9) : sprintf('%.1f MB', (-s $f)/1e6)) : 'NOT FOUND'));
+	}
+	$line->("  options:      ", join(' ', map { "--$_ ".(defined($opt{$_}) ? $opt{$_} : 'NA') } qw(pre ass gen wmodel numth)));
+
+	# ---- databases
+	my %search	= ();
+		# a round is expanded to database hashes only when its step runs; otherwise it is the string given
+	my $round_dbs	= sub {
+		my $round	= shift;
+		return @{$opt{$round}} if( ref($opt{$round}) eq 'ARRAY' );
+		return () if( !$opt{$round} );
+		my @dbs	= ();
+		foreach my $tk( split(/,/, $opt{$round}) ){
+			my ($target, $key)	= ($tk =~ /:/) ? split(/:/, $tk, 2) : ('', $tk);
+			my %d	= defined($opt{'ann.databases'}->{$key}) ? %{$opt{'ann.databases'}->{$key}} : ();
+			push(@dbs, { %d, key => $key, target => $target });
+		}
+		return @dbs;
+	};
+	$line->();
+	$line->("databases:");
+	$line->("  annotation_strategy: ", ($opt{anns} ? lc($opt{anns}) : 'none (explicit --ann1/--ann2)'));
+	if( $opt{anns} ){
+		$line->(sprintf("    %-22s %s", lc($opt{anns}).":", $opt{'ann.strategies'}->{lc($opt{anns})} // '?'));
+	}
+	foreach my $round('ann1','ann2'){
+		my @dbs	= $round_dbs->($round);
+		$line->();
+		$line->("  annotation round ", substr($round, -1), " (--$round):", (@dbs ? '' : ' none'));
+		foreach my $d(@dbs){
+			if( !defined($d->{db}) ){
+				$line->(sprintf("  %-26s NOT IN CONFIG", $d->{key}));
+				next;
+			}
+			$search{$d->{search}} = 1;
+			my $label	= ($round eq 'ann2' && $d->{target}) ? "$d->{target}:$d->{key}" : $d->{key};
+			$row->($label, $d->{name} // '', $d->{db}, $d->{url});
+		}
+	}
+	$line->();
+	$line->("  host genomes (--hostgen):", (ref($opt{hostdb}) eq 'ARRAY' ? '' : ' none'));
+	if( ref($opt{hostdb}) eq 'ARRAY' ){
+		my @keys	= split(/,/, $opt{hostgen});
+		for(my $i=0; $i<scalar(@{$opt{hostdb}}); $i++){
+			my $d	= $opt{hostdb}->[$i];
+			$row->($keys[$i] // $d->{name}, join(' ', grep { $_ } $d->{accession}, ($d->{latinName} // $d->{name})), $d->{db}, $d->{url});
+		}
+	}
+	$line->();
+	$line->("  taxonomy:");
+	$row->('NCBI taxonomy', 'taxdump', "$opt{taxonomy}->{db}/names.dmp", $opt{taxonomy}->{url});
+	if( defined($opt{'ICTV.VMR'}) ){
+		$row->('ICTV VMR', $opt{'ICTV.VMR'}->{name} // '', $opt{'ICTV.VMR'}->{db}, $opt{'ICTV.VMR'}->{url});
+	}
+
+	# ---- parameters: config.yaml general.parameters after command-line overrides
+	$line->();
+	$line->("parameters (config.yaml general.parameters, after command-line overrides):");
+	if( ref($opt{'general.parameters'}) eq 'HASH' ){
+		foreach my $k( sort keys %{$opt{'general.parameters'}} ){
+			$line->(sprintf("  %-26s %s", $k, defined($opt{$k}) ? $opt{$k} : ''));
+		}
+	}
+
+	# ---- freshness: pipeline files or databases changed while this run was going
+	foreach my $f( $script, $config_file, glob("$perl_scripts/Lazypipe/*.pm"), glob("$R_scripts/*.R") ){
+		my @st	= stat($f) or next;
+		push(@stale, $f) if( $st[9] > $^T );
+	}
+	$line->();
+	$line->("freshness check (modified after run start, $time):");
+	if( @stale ){
+		$line->("  WARNING: modified during this run: $_") foreach(@stale);
+	}
+	else{
+		$line->("  none — pipeline files and databases found predate the run");
+	}
+	$line->("  WARNING: not found, so not checked: $_") foreach(@notfound);
+
+	# ---- tools this run's options use
+	my @tools	= qw(perl bwa samtools seqkit csvtk taxonkit pigz ktImportText Rscript);
+	push(@tools, 'fastp')		if( $opt{pre} eq 'fastp' );
+	push(@tools, 'trimmomatic')	if( $opt{pre} eq 'trimm' );
+	push(@tools, 'megahit')		if( $opt{ass} eq 'megahit' );
+	push(@tools, 'spades.py')	if( $opt{ass} eq 'spades' );
+	push(@tools, 'mga')			if( $opt{gen} eq 'mga' );
+	push(@tools, 'prodigal')		if( $opt{gen} eq 'prod' );
+	push(@tools, 'orfipy')		if( $opt{gen} eq 'orfipy' );
+	push(@tools, 'minimap2')		if( $search{minimap} );
+	push(@tools, $_)			foreach( grep { $search{$_} } qw(blastn blastp blastx hmmscan) );
+	push(@tools, 'diamond')		if( $search{diamondx} || $search{diamondp} );
+	push(@tools, (split(' ', $opt{call_sans} // 'sanspanz'))[0]) if( $search{sans} );
+	push(@tools, 'datasets')		if( $opt{pipe}->{rgreport} );
+	$line->();
+	$line->("tools (versions at run time):");
+	foreach my $t(@tools){
+		$line->(sprintf("  %-14s %s", $t, prov_tool_version($t)));
+	}
+
+	# ---- R packages loaded by the report scripts
+	$line->();
+	$line->("R packages:");
+	my %pk	= ();
+	foreach my $f( glob("$R_scripts/*.R") ){
+		open(my $fh, '<', $f) or next;
+		while(my $l = <$fh>){
+			$pk{$1} = 1 while( $l =~ /(?:library|require)\(\s*([A-Za-z0-9.]+)/g );
+		}
+		close($fh);
+	}
+	my @call_R	= split(' ', $opt{call_R} || 'Rscript');
+	if( !`sh -c 'command -v $call_R[0]' 2>/dev/null` ){
+		$line->("  ($call_R[0] not on PATH)");
+	}
+	elsif( !%pk ){
+		$line->("  (none found)");
+	}
+	elsif( open(my $ph, '-|', 'timeout', '120', @call_R, '-e',
+			'for (p in commandArgs(TRUE)) cat(sprintf("  %-12s %s\n", p, '.
+			'tryCatch(as.character(packageVersion(p)), error = function(e) "(not installed)")))',
+			sort keys %pk) ){
+		$txt .= join('', <$ph>);
+		close($ph);
+	}
+
+	# ---- write: one section per invocation
+	my $sep	= (-s $out) ? "\n\n" : "";
+	open(my $fh, '>>', $out) or die "ERROR: $subid: cannot write $out: $!\n";
+	print $fh $sep, $txt;
+	close($fh);
+	print STDERR "\t$out\n" if( $opt{v} );
+	print STDERR "\tWARNING: $subid: $_\n" foreach( map { "modified during this run: $_" } @stale );
+}
+
+sub prov_sha256{
+	my $f	= shift;
+	return '(not found)' if( !defined($f) || !(-f $f) );
+	return Digest::SHA->new(256)->addfile($f)->hexdigest;
+}
+
+# total size and newest modification time of the files a database path names
+# (an index prefix like core_nt matches its volumes)
+sub prov_files{
+	my $path	= shift;
+	return (undef, 0) if( !defined($path) );
+	my @f		= grep { -f $_ } glob("$path*");
+	return (undef, 0) if( !@f );
+	my ($m, $sz)	= (0, 0);
+	foreach(@f){
+		my @st	= stat($_);
+		$m	= $st[9] if( $st[9] > $m );
+		$sz	+= $st[7];
+	}
+	return ($m, $sz);
+}
+
+# commit, date, dirty flag (tracked files only) and remote of the repository holding a path
+sub prov_git_state{
+	my $p	= shift;
+	my $d	= (-d $p) ? $p : dirname($p);
+	my $git	= "git -c safe.directory='*' -C '$d'";
+	return "not a git repository" if( `$git rev-parse --is-inside-work-tree 2>/dev/null` !~ /true/ );
+	my $commit	= `$git rev-parse --short HEAD 2>/dev/null`;					chomp($commit);
+	my $date		= `$git log -1 --format=%cd --date=short 2>/dev/null`;		chomp($date);
+	my $dirty	= `$git status --porcelain --untracked-files=no -- '$p' 2>/dev/null`;
+	my $remote	= `$git config --get remote.origin.url 2>/dev/null`;			chomp($remote);
+	return sprintf("commit %s (%s), dirty: %s, remote: %s", $commit, $date, ($dirty ? 'yes' : 'no'), ($remote || 'none'));
+}
+
+# Tools disagree on how to be asked; the awkward ones are named, the rest get --version
+sub prov_tool_version{
+	my $t		= shift;
+	my $path		= `sh -c 'command -v $t' 2>/dev/null`;
+	chomp($path);
+	return "(not on PATH)" if( !$path );
+	return sprintf("perl %vd", $^V) if( $t eq 'perl' );
+	return "MetaGeneAnnotator (no version flag): ".substr(prov_sha256($path), 0, 16)." sha256" if( $t eq 'mga' );
+	my %call	= (
+		bwa				=> "bwa 2>&1 | grep -m1 '^Version'",
+		samtools		=> "samtools --version | head -1",
+		seqkit			=> "seqkit version 2>&1 | head -1",
+		csvtk			=> "csvtk version 2>&1 | head -1",
+		taxonkit		=> "taxonkit version 2>&1 | head -1",
+		diamond			=> "diamond version 2>&1 | head -1",
+		blastn			=> "blastn -version 2>&1 | head -1",
+		blastp			=> "blastp -version 2>&1 | head -1",
+		blastx			=> "blastx -version 2>&1 | head -1",
+		hmmscan			=> "hmmscan -h 2>&1 | grep -m1 '^# HMMER'",
+		ktImportText	=> "ktImportText 2>&1 | grep -m1 -o 'KronaTools [0-9.]*'",
+		Rscript			=> "Rscript --version 2>&1 | head -1",
+		trimmomatic		=> "trimmomatic -version 2>&1 | head -1",
+		prodigal		=> "prodigal -v 2>&1 | grep -m1 -i prodigal",
+		datasets		=> "datasets --version 2>&1 | head -1",
+	);
+	my $call	= defined($call{$t}) ? $call{$t} : "$t --version 2>&1 | head -1";
+	open(my $ph, '-|', 'timeout', '30', 'bash', '-c', $call) or return "(version unknown)";
+	my $v	= join('', <$ph>);
+	close($ph);
+	$v	=~ s/\s+$//;
+	$v	=~ s/[\r\n]+/ /g;
+	return $v ne '' ? $v : "(version unknown)";
+}
+
+
 sub clean{
 	my %opt = %{shift()};
 
@@ -2366,6 +2681,7 @@ sub options_format{
 		}
 		my %ann	 			= %{$opt{'ann.databases'}->{$dbname}};
 		$ann{target} 		= $target;
+		$ann{key}			= $dbname;	# for write_provenance()
 
 		if($dbname ne 'sans'){
 			# check that database files exist
@@ -2407,6 +2723,7 @@ sub options_format{
 
 		my %ann 				= %{$opt{'ann.databases'}->{$dbname}};
 		$ann{target}			= $target;
+		$ann{key}				= $dbname;	# for write_provenance()
 
 		if($dbname ne 'sans'){
 			# check that database files exist
