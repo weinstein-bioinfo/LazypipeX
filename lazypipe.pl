@@ -24,6 +24,10 @@ use Lazypipe::SeqAn;
 #
 # Credit:
 #
+# Weinstein, I., Vapalahti, O., Kant, R., & Smura, T. (2026).
+# LazypipeX: customizable virome analysis pipeline enabling fast and sensitive virus discovery from NGS data.
+# npj Viruses. https://doi.org/10.1038/s44298-026-00237-x
+#
 # Plyusnin, I., Vapalahti, O., Sironen, T., Kant, R., & Smura, T. (2023).
 # Enhanced Viral Metagenomics with Lazypipe 2. Viruses, 15(2), 431.
 #
@@ -104,8 +108,9 @@ my $usage= 	"\n$PIPELINE_NAME $PIPELINE_VERSION\n".
 		"NOTE: command line options take precedence over $config_file options\n".
 		"\n".
 		"CREDIT:\n".
-		"Plyusnin,I., Kant,R., Jaaskelainen,A.J., Sironen,T., Holm,L., Vapalahti,O. and Smura,T. (2020)\n".
-		"Novel NGS Pipeline for Virus Discovery from a Wide Spectrum of Hosts and Sample Types. Virus Evolution, veaa091\n\n".
+		"Weinstein,I., Vapalahti,O., Kant,R. and Smura,T. (2026)\n".
+		"LazypipeX: customizable virome analysis pipeline enabling fast and sensitive virus discovery from NGS data.\n".
+		"npj Viruses. https://doi.org/10.1038/s44298-026-00237-x\n\n".
 		"CONTACT:\n".
 		"grp-lazypipe\@helsinki.fi\n\n";
 

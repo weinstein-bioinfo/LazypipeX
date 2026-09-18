@@ -30,6 +30,10 @@ our $VERSION		= 3.0;
 # 
 # Credit:
 #
+# Weinstein, I., Vapalahti, O., Kant, R., & Smura, T. (2026).
+# LazypipeX: customizable virome analysis pipeline enabling fast and sensitive virus discovery from NGS data.
+# npj Viruses. https://doi.org/10.1038/s44298-026-00237-x
+#
 # Plyusnin, I., Vapalahti, O., Sironen, T., Kant, R., & Smura, T. (2023).
 # Enhanced Viral Metagenomics with Lazypipe 2. Viruses, 15(2), 431.
 #

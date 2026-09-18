@@ -790,7 +790,7 @@ Note that command line options take precedence over options in `config.yaml` fil
 <a name="Citing" id="Citing"></a>
 **Citing LazypipeX**
 
-1. Ilya Weinstein, Olli Vapalahti, Ravi Kant, Teemu Smura. LazypipeX: Customizable Virome Analysis Pipeline Enabling Fast and Sensitive Virus Discovery from NGS data. bioRxiv (2025). https://doi.org/10.1101/2025.04.29.651217 (Preprint; under review at npj Viruses.)
+1. Ilya Weinstein, Olli Vapalahti, Ravi Kant, Teemu Smura. LazypipeX: customizable virome analysis pipeline enabling fast and sensitive virus discovery from NGS data. npj Viruses (2026). https://doi.org/10.1038/s44298-026-00237-x
 
 Earlier versions:
 

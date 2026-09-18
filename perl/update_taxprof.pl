@@ -7,6 +7,10 @@ use Getopt::Long qw(GetOptions);
 # Updates taxonomic profile using the supplied NCBI taxonomy dump
 #
 # Credit:
+# Weinstein, I., Vapalahti, O., Kant, R., & Smura, T. (2026).
+# LazypipeX: customizable virome analysis pipeline enabling fast and sensitive virus discovery from NGS data.
+# npj Viruses. https://doi.org/10.1038/s44298-026-00237-x
+#
 # Plyusnin,I., Kant,R., Jaaskelainen,A.J., Sironen,T., Holm,L., Vapalahti,O. and Smura,T. (2020) 
 # Novel NGS Pipeline for Virus Discovery from a Wide Spectrum of Hosts and Sample Types. Virus Evolution, veaa091
 #
@@ -24,8 +28,9 @@ my $usage=      "\nUSAGE: $0 -t|taxonomy path taxprof.txt 1> taxprof.updated.txt
 				"\t- delete taxa listed in \$taxonomy/delnodes.dmp\n".
 				"\t- merge taxa listed in \$taxonomy/merged.dmp\n\n".
 				"Credit:\n".
-				"Plyusnin,I., Kant,R., Jaaskelainen,A.J., Sironen,T., Holm,L., Vapalahti,O. and Smura,T. (2020)\n".
-				"Novel NGS Pipeline for Virus Discovery from a Wide Spectrum of Hosts and Sample Types. Virus Evolution, veaa091\n".
+				"Weinstein,I., Vapalahti,O., Kant,R. and Smura,T. (2026)\n".
+				"LazypipeX: customizable virome analysis pipeline enabling fast and sensitive virus discovery from NGS data.\n".
+				"npj Viruses. https://doi.org/10.1038/s44298-026-00237-x\n".
 				"Contact: grp-lazypipe\@helsinki.fi\n\n";
 my $help 		= !1;
 my $taxonomy	= "\$data/taxonomy";
